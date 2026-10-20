@@ -1,0 +1,20 @@
+{
+  "name": "credit-cabinet-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Кредитный кабинет предпринимателя: API, движок факторов и веб-интерфейс (прототип хакатона)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/*.test.js\"",
+    "dev": "node --disable-warning=ExperimentalWarning ../scripts/dev.mjs"
+  },
+  "dependencies": {
+    "express": "4.22.3",
+    "swagger-ui-dist": "5.34.0",
+    "yaml": "2.9.1"
+  }
+}
