@@ -1,0 +1,13 @@
+{
+  "name": "credit-cabinet-mocks",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Моки внешних источников: ФНС/ЕГРЮЛ, БКИ, выписка по счёту. Без внешних зависимостей.",
+  "type": "module",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": {
+    "start:fns": "PORT=4001 node src/server.js fns",
+    "start:bki": "PORT=4002 node src/server.js bki",
+    "start:statement": "PORT=4003 node src/server.js statement"
+  }
+}
