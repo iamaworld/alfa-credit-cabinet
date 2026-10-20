@@ -68,7 +68,7 @@ export function badge(text, tone = '') {
 export function factorList(items) {
   return h('ul', { class: 'plain' }, items.map((f) =>
     h('li', { class: 'factor' },
-      h('span', { class: `arrow ${f.direction === 'up' ? 'up' : f.direction === 'down' ? 'down' : 'flat'}`, 'aria-hidden': 'true' }, f.direction === 'up' ? '↑' : f.direction === 'down' ? '↓' : '•'),
+      h('span', { class: `arrow ${f.direction === 'up' ? 'up' : f.direction === 'down' ? 'down' : 'flat'}` }, icon(f.direction === 'up' ? 'arrowUp' : f.direction === 'down' ? 'arrowDown' : 'minus', 16)),
       h('div', null, h('b', null, f.title), f.message ? h('span', null, f.message) : null))));
 }
 

@@ -74,7 +74,7 @@ export async function route() {
     cleanup = await match.run(slot);
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) return undefined;
-    clear(slot).append(h('div', { class: 'card' }, h('h2', null, 'Не получилось загрузить страницу'), h('p', { class: 'muted' }, e.message || 'Попробуйте обновить страницу.'), h('p', null, h('button', { class: 'btn', onclick: () => route() }, 'Повторить'))));
+    clear(slot).append(h('div', { class: 'card stack' }, h('h2', null, 'Не получилось загрузить страницу'), h('p', { class: 'muted' }, e.message || 'Попробуйте обновить страницу.'), h('p', null, h('button', { class: 'btn', onclick: () => route() }, 'Повторить'))));
   }
   window.scrollTo(0, 0);
   return undefined;

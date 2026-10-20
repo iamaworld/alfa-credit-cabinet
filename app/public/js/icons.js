@@ -102,6 +102,24 @@ const PATHS = {
       "d": "M14 12l-5.5 5.5L10 19l7-7-7-7-1.5 1.5L14 12z",
       "evenodd": false
     }
+  ],
+  "arrowUp": [
+    {
+      "d": "M11 7.5V19h2V7.5l3.5 3.5L18 9.5 12 4 6 9.5 7.5 11 11 7.5z",
+      "evenodd": false
+    }
+  ],
+  "arrowDown": [
+    {
+      "d": "M11 16.5V5h2v11.5l3.5-3.5 1.5 1.5-6 5.5-6-5.5L7.5 13l3.5 3.5z",
+      "evenodd": false
+    }
+  ],
+  "minus": [
+    {
+      "d": "M3 11h18v2H3v-2z",
+      "evenodd": false
+    }
   ]
 };
 

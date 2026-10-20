@@ -36,7 +36,7 @@ async function connectStep(root) {
     h('aside', { class: 'card stack' },
       h('h3', null, 'Как это работает'),
       h('ul', { class: 'plain' },
-        ['Находим компанию в реестре', 'Смотрим кредитную историю и обороты по счёту', 'Показываем лимит, который уже одобрен заранее, и почему он такой'].map((t) => h('li', { class: 'factor' }, h('span', { class: 'arrow up', 'aria-hidden': 'true' }, '✓'), h('div', null, h('span', { style: { color: 'var(--ink)' } }, t))))),
+        ['Находим компанию в реестре', 'Смотрим кредитную историю и обороты по счёту', 'Показываем лимит, который уже одобрен заранее, и почему он такой'].map((t) => h('li', { class: 'factor' }, h('span', { class: 'arrow up' }, icon('check', 16)), h('div', null, h('span', { style: { color: 'var(--ink)' } }, t))))),
       me?.inn ? h('div', { class: 'banner info' }, h('div', null, h('b', null, 'Для теста: '), `ИНН ${me.inn} (${me.company}).`, ' ', h('button', { class: 'link', type: 'button', onclick: () => { inn.value = me.inn; inn.focus(); } }, 'Подставить'))) : null)));
 }
 
@@ -88,7 +88,7 @@ async function renderCompany(root, company, all) {
   const productCards = company.status !== 'ACTIVE' ? null : h('div', { class: 'grid cols-3' }, offers.offers.map((o) => productCard(o, pname[o.product], inn)));
 
   const attention = myApps.filter((a) => ['needs_info', 'counter_offer', 'approved', 'signing'].includes(a.status));
-  const appStrip = myApps.length ? h('section', { class: 'card' },
+  const appStrip = myApps.length ? h('section', { class: 'card stack' },
     h('div', { class: 'row between' }, h('h2', null, 'Ваши заявки'), h('a', { class: 'link', href: '#/applications' }, 'Все заявки')),
     h('div', { class: 'stack' }, myApps.slice(0, 3).map((a) => h('a', { class: 'row between card tight', style: { 'background': 'var(--bg)', 'text-decoration': 'none' }, href: `#/applications/${a.id}` },
       h('div', null, h('b', null, `${a.number} · ${a.productName}`), h('div', { class: 'small muted' }, `${rub(a.amount)}, ${months(a.term)}`)),
@@ -134,12 +134,12 @@ function questCard(q) {
     h('div', { class: 'row between' }, h('h2', null, q.title), h('b', { class: 'num' }, `${done} из ${total}`)),
     meter(done, total, done === total ? 'ok' : 'mid'),
     h('ul', { class: 'plain' }, q.checklist.map((c) => h('li', { class: 'factor' },
-      h('span', { class: `arrow ${c.done ? 'up' : 'flat'}`, 'aria-hidden': 'true' }, c.done ? '✓' : '•'),
+      h('span', { class: `arrow ${c.done ? 'up' : 'flat'}` }, icon(c.done ? 'check' : 'minus', 16)),
       h('div', null, h('b', null, c.label), !c.done && c.hint ? h('span', null, c.hint) : null)))));
 }
 
 function feedItem(i) {
-  return h('article', { class: 'stack' },
+  return h('article', { class: 'stack feed-item' },
     h('div', { class: 'row' }, h('b', null, i.title), i.kind === 'support' ? badge('Возможно подойдёт', 'blue') : null),
     h('p', { class: 'muted small' }, i.text),
     i.note ? h('p', { class: 'hint' }, i.note) : null,
