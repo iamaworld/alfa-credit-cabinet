@@ -1,6 +1,7 @@
 import { h, toast } from '../ui.js';
 import { get, post } from '../api.js';
 import { session, go } from '../nav.js';
+import { alfaLogo } from '../icons.js';
 
 export async function loginPage(root) {
   const demo = await get('/demo/accounts').catch(() => ({ enabled: false, accounts: [] }));
@@ -31,7 +32,7 @@ export async function loginPage(root) {
 
   root.append(h('div', { class: 'login' },
     h('section', { class: 'login-l' },
-      h('div', { class: 'brand' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, 'К'), h('span', null, 'Кредитный кабинет')),
+      h('div', { class: 'brand' }, h('span', { class: 'brand-mark' }, alfaLogo(22)), h('span', null, 'Альфа-Банк', h('small', null, 'Кредитный кабинет для бизнеса'))),
       h('div', { class: 'stack' },
         h('h1', null, 'Кредит для бизнеса: ', h('em', null, 'понятно'), ' до заявки и после неё'),
         h('p', { class: 'muted' }, 'Предодобренный лимит, условия, которые можно менять и сразу видеть почему, и статус заявки без звонков. Учебный прототип: данные синтетические.')),

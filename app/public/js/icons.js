@@ -118,3 +118,16 @@ export function icon(name, size = 24) {
   }
   return svg;
 }
+
+// Знак Альфа-Банка из @alfalab/icons-logotype 2.37.0 (AlfaBankLIcon), используется с разрешения для прототипа хакатона
+const ALFA_LOGO = 'M10.471 4.886l-3.081 8.89h6.106l-2.91-8.89h-.115zM10.7 0c2.474 0 3.196 1.432 3.822 3.245L21 22h-4.794l-1.455-4.459H6.077L4.508 22H0L6.798 3.245C7.458 1.426 8.226 0 10.7 0zM0 27h21v5H0v-5z';
+export function alfaLogo(height = 20) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 21 32'); svg.setAttribute('height', height); svg.setAttribute('width', Math.round(height * 21 / 32));
+  svg.setAttribute('fill', 'currentColor'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Альфа-Банк');
+  const p = document.createElementNS(ns, 'path');
+  p.setAttribute('d', ALFA_LOGO); p.setAttribute('fill-rule', 'evenodd'); p.setAttribute('clip-rule', 'evenodd');
+  svg.append(p);
+  return svg;
+}

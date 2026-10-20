@@ -1,4 +1,5 @@
 import { h, clear, toast, icon } from './ui.js';
+import { alfaLogo } from './icons.js';
 import { get, post, setUnauthorizedHandler, ApiError } from './api.js';
 import { loginPage } from './pages/login.js';
 import { homePage } from './pages/home.js';
@@ -20,8 +21,8 @@ function shell(content, active) {
   return h('div', null,
     h('header', { class: 'top' }, h('div', { class: 'top-in' },
       h('a', { class: 'brand', href: analyst ? '#/analyst' : '#/' },
-        h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, 'К'),
-        h('span', null, 'Кредитный кабинет', h('small', null, analyst ? 'Кабинет аналитика' : 'Для предпринимателей · прототип'))),
+        h('span', { class: 'brand-mark' }, alfaLogo(20)),
+        h('span', null, 'Кредитный кабинет', h('small', null, analyst ? 'Альфа-Банк · кабинет аналитика' : 'Альфа-Банк для бизнеса · прототип'))),
       h('nav', { class: 'nav', 'aria-label': 'Разделы' }, links.map(([href, text]) => h('a', { href, 'aria-current': active === href ? 'page' : null }, text))),
       h('div', { class: 'top-right' },
         analyst ? null : bellWidget(),
@@ -68,7 +69,7 @@ export async function route() {
   if (match.role !== session.user.role) return go(session.user.role === 'analyst' ? '#/analyst' : '#/');
   const slot = h('div', null);
   clear(root).append(shell(slot, match.active));
-  document.title = 'Кредитный кабинет предпринимателя';
+  document.title = 'Альфа-Банк · Кредитный кабинет для бизнеса';
   try {
     cleanup = await match.run(slot);
   } catch (e) {

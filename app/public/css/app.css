@@ -51,7 +51,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .top { background: var(--card); position: sticky; top: 0; z-index: 20; box-shadow: 0 1px 0 var(--line); }
 .top-in { max-width: 1200px; margin: 0 auto; padding: 0 var(--gutter); height: 72px; display: flex; align-items: center; gap: 32px; }
 .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; color: var(--ink); }
-.brand-mark { width: 36px; height: 36px; border-radius: 10px; background: var(--red); display: grid; place-items: center; color: #fff; font-weight: 600; font-size: 18px; font-family: var(--font-head); }
+.brand-mark { width: 40px; height: 40px; border-radius: 12px; background: var(--red); display: grid; place-items: center; color: #fff; flex: none; }
 :root[data-role='analyst'] .brand-mark { background: var(--graphite); }
 .brand small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; letter-spacing: 0; line-height: 1.2; font-family: var(--font-text); }
 .nav { display: flex; gap: 28px; flex: 1; height: 100%; }
@@ -260,6 +260,7 @@ table.tbl { width: 100%; border-collapse: collapse; }
 .login-l::after { content: ''; position: absolute; z-index: -1; width: 220px; height: 220px; border-radius: 50%; right: 120px; top: 80px; background: rgba(255, 255, 255, .08); }
 .login-l .brand { color: #fff; }
 .login-l .brand-mark { background: #fff; color: var(--red); }
+.login-l .brand small { color: rgba(255, 255, 255, .8); }
 .login-l h1 { max-width: 12ch; font-size: clamp(40px, 5.4vw, 72px); line-height: 1.04; letter-spacing: -0.03em; }
 .login-l h1 em { font-style: normal; color: var(--graphite); }
 .login-l .muted, .login-l .hint { color: rgba(255, 255, 255, .8); }
