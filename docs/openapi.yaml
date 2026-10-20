@@ -1,0 +1,353 @@
+openapi: 3.0.3
+info:
+  title: Умный кредитный кабинет предпринимателя — API
+  version: 1.0.0
+  description: |
+    Учебный прототип цифрового кредитного конвейера для малого бизнеса. Все данные синтетические.
+
+    **Авторизация.** `POST /api/auth/login` ставит HttpOnly-cookie `cabinet_session`. Для curl и коллекции запросов
+    тот же токен можно передавать заголовком `Authorization: Bearer <token>`.
+
+    **Роли.** `client` — предприниматель, `analyst` — сотрудник банка. Чужие заявки клиенту недоступны (ответ 404).
+
+    **Идемпотентность.** Методы `submit`, `accept`, `sign` принимают заголовок `Idempotency-Key`.
+    Повтор с тем же ключом и телом возвращает сохранённый ответ (`Idempotent-Replay: true`), с другим телом — 422.
+
+    **Ошибки.** Единый формат: `{ "error": { "code", "message", "details" } }`.
+servers:
+  - url: http://localhost:3000
+tags:
+  - { name: Auth, description: Вход и сессия }
+  - { name: Company, description: Подключение компании по ИНН, предодобренные предложения, лента }
+  - { name: Offer, description: Редактор условий и пересчёт }
+  - { name: Application, description: Заявка клиента }
+  - { name: Analyst, description: Кабинет аналитика }
+  - { name: System, description: Служебные методы }
+security:
+  - cookieAuth: []
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Проверка живости
+      security: []
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { status: { type: string, example: ok }, time: { type: string, format: date-time } } } } } }
+  /api/demo/accounts:
+    get:
+      tags: [System]
+      summary: Тестовые аккаунты и сценарии
+      description: Пусто, если запуск с `SEED=0`.
+      security: []
+      responses:
+        '200': { description: Список аккаунтов, content: { application/json: { schema: { $ref: '#/components/schemas/DemoAccounts' } } } }
+  /api/products:
+    get:
+      tags: [System]
+      summary: Каталог продуктов
+      security: []
+      responses:
+        '200': { description: Продукты и цели кредита, content: { application/json: { schema: { type: object } } } }
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Вход
+      description: После 8 неудачных попыток за 10 минут для пары «логин + IP» вход блокируется (429).
+      security: []
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [login, password], properties: { login: { type: string, example: client-a }, password: { type: string, example: demo1234 } } } } }
+      responses:
+        '200': { description: Вход выполнен, content: { application/json: { schema: { type: object, properties: { user: { $ref: '#/components/schemas/User' }, token: { type: string } } } } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Выход
+      responses:
+        '200': { description: OK }
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Текущий пользователь
+      description: "Без сессии возвращает `user: null`."
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { user: { nullable: true, allOf: [{ $ref: '#/components/schemas/User' }] }, companies: { type: array, items: { type: string } } } } } } }
+  /api/companies:
+    get:
+      tags: [Company]
+      summary: Подключённые компании
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { companies: { type: array, items: { $ref: '#/components/schemas/Company' } } } } } } }
+    post:
+      tags: [Company]
+      summary: Подключить компанию по ИНН
+      description: Находит компанию в реестре (мок ЕГРЮЛ/ЕГРИП) и привязывает к кабинету. В реальном продукте здесь нужна проверка полномочий.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [inn], properties: { inn: { type: string, example: '7701234567' } } } } }
+      responses:
+        '201': { description: Подключено, content: { application/json: { schema: { type: object, properties: { company: { $ref: '#/components/schemas/Company' } } } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /api/companies/{inn}:
+    get:
+      tags: [Company]
+      summary: Профиль, статус источников и сводка
+      parameters: [{ $ref: '#/components/parameters/Inn' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object } } } }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/companies/{inn}/offers:
+    get:
+      tags: [Company]
+      summary: Предодобренные предложения
+      description: По каждому продукту — сумма, срок, диапазон ставки, платёж, срок действия (30 дней) и факторы «почему такой лимит».
+      parameters: [{ $ref: '#/components/parameters/Inn' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { offers: { type: array, items: { $ref: '#/components/schemas/PreapprovedOffer' } }, degraded: { type: boolean }, validDays: { type: integer } } } } } }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/companies/{inn}/feed:
+    get:
+      tags: [Company]
+      summary: Лента клиента
+      description: Готовность к кредиту, подсказки по отрасли, примеры мер поддержки (демонстрационные), напоминания по заявкам.
+      parameters: [{ $ref: '#/components/parameters/Inn' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object } } } }
+  /api/offers/preview:
+    post:
+      tags: [Offer]
+      summary: Пересчёт условий
+      description: Тот же движок, что решает по заявке. Возвращает платёж, диапазон ставки, переплату, нагрузку, шанс, факторы без весов и порогов, объяснение изменений относительно `compareTo` и подсказки «что повысит шансы».
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PreviewRequest' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Preview' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/applications:
+    get:
+      tags: [Application]
+      summary: Мои заявки
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { applications: { type: array, items: { type: object } } } } } } }
+    post:
+      tags: [Application]
+      summary: Создать черновик
+      description: Данные компании подставляются из реестра, список документов зависит от продукта.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [inn, request], properties: { inn: { type: string }, request: { $ref: '#/components/schemas/LoanRequest' }, purpose: { type: string, enum: [cash_gap, working, equipment, development] } } } } }
+      responses:
+        '201': { description: Черновик создан, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationEnvelope' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/applications/{id}:
+    get:
+      tags: [Application]
+      summary: Карточка заявки
+      description: Статус простым языком, этап, лента событий, решение с причинами и планом (без внутренних баллов).
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationEnvelope' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Application]
+      summary: Автосохранение черновика
+      description: Оптимистичная блокировка по `version`; при расхождении — 409 `version_conflict`.
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { version: { type: integer }, request: { $ref: '#/components/schemas/LoanRequest' }, purpose: { type: string }, declaredRevenue: { type: integer, nullable: true }, form: { type: object, properties: { employees: { type: integer }, address: { type: string }, comment: { type: string }, consents: { type: object, properties: { personalData: { type: boolean } } } } } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationEnvelope' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/applications/{id}/documents/{kind}:
+    put:
+      tags: [Application]
+      summary: Приложить документ (имитация)
+      description: Сохраняется только имя файла.
+      parameters: [{ $ref: '#/components/parameters/Id' }, { name: kind, in: path, required: true, schema: { type: string, enum: [passport, bki_consent, purchase_contract] } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [fileName], properties: { fileName: { type: string, example: passport.pdf } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationEnvelope' } } } }
+  /api/applications/{id}/submit:
+    post:
+      tags: [Application]
+      summary: Отправить заявку
+      description: Идемпотентно. Неполная заявка — 422 со списком недостающего. Конвейер (проверка → данные → оценка → решение) выполняется асинхронно, статус меняется сам.
+      parameters: [{ $ref: '#/components/parameters/Id' }, { $ref: '#/components/parameters/IdemKey' }]
+      responses:
+        '202': { description: Принята в обработку, content: { application/json: { schema: { type: object, properties: { application: { type: object }, replayed: { type: boolean } } } } } }
+        '200': { description: Повторная отправка — дубль не создан }
+        '422': { $ref: '#/components/responses/Error' }
+  /api/applications/{id}/cancel:
+    post:
+      tags: [Application]
+      summary: Отменить заявку или отказаться от предложения
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationEnvelope' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/applications/{id}/info/{infoId}/answer:
+    post:
+      tags: [Application]
+      summary: Ответить на запрос банка
+      description: Для запроса выручки — `declaredRevenue`, для текстового — `answer`. Когда ответы получены на все вопросы, проверка продолжается сама.
+      parameters: [{ $ref: '#/components/parameters/Id' }, { name: infoId, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { declaredRevenue: { type: integer, example: 1500000 }, answer: { type: string } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationEnvelope' } } } }
+  /api/applications/{id}/accept:
+    post:
+      tags: [Application]
+      summary: Принять одобренные условия или выбранный вариант
+      description: Для статуса `counter_offer` нужен `altId`. Условия договора пересчитываются движком, а не берутся от клиента.
+      parameters: [{ $ref: '#/components/parameters/Id' }, { $ref: '#/components/parameters/IdemKey' }]
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { altId: { type: string } } } } }
+      responses:
+        '200': { description: OK — переход в signing, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationEnvelope' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/applications/{id}/sign:
+    post:
+      tags: [Application]
+      summary: Подписать договор (имитация) и получить деньги
+      parameters: [{ $ref: '#/components/parameters/Id' }, { $ref: '#/components/parameters/IdemKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [confirm], properties: { confirm: { type: boolean } } } } }
+      responses:
+        '200': { description: OK — статус disbursed, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationEnvelope' } } } }
+  /api/notifications:
+    get:
+      tags: [Application]
+      summary: Уведомления внутри кабинета
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { unread: { type: integer }, items: { type: array, items: { type: object } } } } } } }
+  /api/notifications/read:
+    post:
+      tags: [Application]
+      summary: Отметить все прочитанными
+      responses:
+        '200': { description: OK }
+  /api/analyst/queue:
+    get:
+      tags: [Analyst]
+      summary: Очередь ручной проверки и последние заявки
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { queue: { type: array, items: { type: object } }, recent: { type: array, items: { type: object } } } } } } }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/analyst/applications/{id}:
+    get:
+      tags: [Analyst]
+      summary: Карточка для аналитика
+      description: Профиль, данные источников, факторы с баллами, причины ручной проверки, журнал аудита.
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object } } } }
+  /api/analyst/applications/{id}/decision:
+    post:
+      tags: [Analyst]
+      summary: Решение аналитика
+      description: |
+        Только для заявок в статусе `manual_review`. Одобрение невозможно при жёстком стоп-факторе (409 `hard_stop`);
+        одобрение ниже порога помечается как исключение. Для `approve`, `counter_offer`, `decline` комментарий обязателен (не короче 10 символов).
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [action], properties: { action: { type: string, enum: [approve, counter_offer, decline, request_info, rerun] }, comment: { type: string }, altId: { type: string } } } } }
+      responses:
+        '200': { description: Обновлённая карточка }
+        '409': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    cookieAuth: { type: apiKey, in: cookie, name: cabinet_session }
+    bearerAuth: { type: http, scheme: bearer }
+  parameters:
+    Inn: { name: inn, in: path, required: true, schema: { type: string, pattern: '^(\d{10}|\d{12})$' }, example: '7701234567' }
+    Id: { name: id, in: path, required: true, schema: { type: integer } }
+    IdemKey: { name: Idempotency-Key, in: header, required: false, schema: { type: string, maxLength: 120 } }
+  responses:
+    Error:
+      description: Ошибка
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: object, properties: { code: { type: string }, message: { type: string }, details: {} } }
+    User: { type: object, properties: { id: { type: integer }, login: { type: string }, role: { type: string, enum: [client, analyst] }, name: { type: string } } }
+    DemoAccounts: { type: object, properties: { enabled: { type: boolean }, password: { type: string }, accounts: { type: array, items: { type: object } } } }
+    Company: { type: object, properties: { inn: { type: string }, name: { type: string }, shortName: { type: string }, legalForm: { type: string }, status: { type: string, enum: [ACTIVE, LIQUIDATING] }, okved: { type: object }, region: { type: string }, address: { type: string }, director: { type: string }, employees: { type: integer }, registrationDate: { type: string, format: date } } }
+    LoanRequest:
+      type: object
+      required: [product, amount, term]
+      properties:
+        product: { type: string, enum: [working_capital, equipment, overdraft] }
+        amount: { type: integer, example: 2500000 }
+        term: { type: integer, description: Месяцы, example: 24 }
+        collateral: { type: boolean }
+    PreviewRequest:
+      type: object
+      required: [inn, request]
+      properties:
+        inn: { type: string }
+        request: { $ref: '#/components/schemas/LoanRequest' }
+        compareTo: { allOf: [{ $ref: '#/components/schemas/LoanRequest' }], description: Предыдущее состояние редактора для блока «что изменилось и почему» }
+        declaredRevenue: { type: integer, description: Выручка со слов клиента (учитывается с дисконтом 20%) }
+        purpose: { type: string }
+    Preview:
+      type: object
+      properties:
+        payment: { type: integer }
+        overpayment: { type: integer }
+        rate: { type: object, properties: { from: { type: number }, to: { type: number } } }
+        load: { type: number, nullable: true, description: Доля свободного денежного потока }
+        chance: { type: string, enum: [high, medium, low, very_low, unknown] }
+        factors: { type: array, items: { $ref: '#/components/schemas/Factor' } }
+        changes: { type: array, items: { type: object, properties: { kind: { type: string }, text: { type: string } } } }
+        improvements: { type: array, items: { type: object } }
+        blockers: { type: array, items: { type: object } }
+        missing: { type: array, items: { type: object } }
+        degraded: { type: boolean }
+        disclaimer: { type: string }
+    Factor: { type: object, properties: { id: { type: string }, title: { type: string }, message: { type: string }, direction: { type: string, enum: [up, down, neutral] } }, description: Клиенту — без баллов и порогов }
+    PreapprovedOffer:
+      type: object
+      properties:
+        product: { type: string }
+        available: { type: boolean }
+        amount: { type: integer }
+        term: { type: integer }
+        payment: { type: integer }
+        rate: { type: object, properties: { from: { type: number }, to: { type: number } } }
+        expiresAt: { type: string, format: date-time }
+        why: { type: array, items: { $ref: '#/components/schemas/Factor' } }
+        limitedBy: { type: string }
+    ApplicationEnvelope: { type: object, properties: { application: { $ref: '#/components/schemas/Application' } } }
+    Application:
+      type: object
+      properties:
+        id: { type: integer }
+        number: { type: string, example: AK-2026-000001 }
+        status: { type: string, enum: [draft, submitted, checking, enrichment, scoring, manual_review, needs_info, counter_offer, approved, declined, signing, disbursed, cancelled, expired] }
+        statusTitle: { type: string }
+        statusText: { type: string }
+        nextStep: { type: string }
+        stage: { type: integer, minimum: 0, maximum: 4 }
+        version: { type: integer }
+        request: { type: object }
+        documents: { type: array, items: { type: object } }
+        readiness: { type: array, items: { type: object } }
+        openInfo: { type: array, items: { type: object } }
+        decision: { type: object, nullable: true, description: Исход, условия или варианты, причины и план действий без внутренних баллов }
+        acceptedTerms: { type: object, nullable: true }
+        timeline: { type: array, items: { type: object, properties: { ts: { type: string }, text: { type: string }, status: { type: string } } } }
