@@ -1,4 +1,4 @@
-import { h, clear, rub, pct1, pct0, months, dateTime, date, badge, meter, factorList, debounce, toast, skeleton, newKey } from '../ui.js';
+import { h, clear, rub, pct1, pct0, months, dateTime, date, badge, meter, factorList, debounce, toast, skeleton, newKey, moneyInput, scheduleBlock, plural, resultIcon } from '../ui.js';
 import { get, post, patch, put, products } from '../api.js';
 import { go } from '../nav.js';
 
@@ -10,7 +10,7 @@ export async function applicationsPage(root) {
   root.append(skeleton(3));
   const { applications } = await get('/applications');
   clear(root).append(
-    h('div', { class: 'page-head' }, h('h1', null, 'Заявки')),
+    h('div', { class: 'page-head' }, h('h1', null, 'Заявки'), applications.length ? h('a', { class: 'btn', href: '#/' }, 'Новая заявка') : null),
     applications.length ? h('div', { class: 'card scroll-x' }, h('table', { class: 'tbl' },
       h('thead', null, h('tr', null, ['Номер', 'Продукт', 'Сумма', 'Срок', 'Статус', 'Обновлена'].map((t) => h('th', null, t)))),
       h('tbody', null, applications.map((a) => h('tr', { class: 'click', tabindex: 0, onclick: () => go(`#/applications/${a.id}`), onkeydown: (e) => { if (e.key === 'Enter') go(`#/applications/${a.id}`); } },
@@ -62,7 +62,7 @@ export async function applicationPage(root, id) {
     const main = (panels[app.status] || (() => progressPanel(app)))();
     clear(stable).append(
       h('div', { class: 'crumbs' }, h('a', { href: '#/applications' }, '← Все заявки')),
-      h('div', { class: 'page-head' }, h('div', null, h('h1', null, `Заявка ${app.number}`), h('p', { class: 'muted' }, `${app.request.productName}, ${rub(app.request.amount)}, ${months(app.request.term)}`)),
+      h('div', { class: 'page-head' }, h('div', null, h('h1', null, 'Заявка ', h('span', { class: 'nowrap' }, app.number)), h('p', { class: 'muted' }, `${app.request.productName}, ${rub(app.request.amount)}, ${months(app.request.term)}`)),
         badge(app.statusTitle, TONE[app.tone])),
       stepper(app),
       h('div', { class: 'split', style: { 'margin-top': '16px' } },
@@ -111,14 +111,14 @@ function infoPanel(app, setApp) {
   return h('section', { class: 'card stack' }, h('h2', null, 'Банку нужна информация'), h('p', { class: 'muted' }, app.nextStep),
     app.openInfo.map((q) => {
       const input = q.kind === 'revenue'
-        ? h('input', { class: 'input', type: 'number', inputmode: 'numeric', min: 1, id: `q${q.id}`, placeholder: 'Например, 1 500 000' })
+        ? moneyInput({ id: `q${q.id}`, placeholder: 'Например, 1 500 000' })
         : h('textarea', { class: 'input', id: `q${q.id}`, maxlength: 2000 });
       const err = h('p', { class: 'err', role: 'alert' });
       const btn = h('button', { class: 'btn', type: 'button' }, 'Отправить ответ');
       btn.addEventListener('click', async () => {
         err.textContent = ''; btn.disabled = true;
         try {
-          const body = q.kind === 'revenue' ? { declaredRevenue: Number(input.value) } : { answer: input.value };
+          const body = q.kind === 'revenue' ? { declaredRevenue: input.getValue() } : { answer: input.value };
           setApp((await post(`/applications/${app.id}/info/${q.id}/answer`, body)).application);
           toast('Ответ отправлен. Продолжаем проверку.');
         } catch (e) { err.textContent = e.message; btn.disabled = false; }
@@ -147,9 +147,9 @@ function twoStepButton(label, confirmLabel, cls, action) {
 function counterPanel(app, setApp) {
   const d = app.decision;
   return h('div', { class: 'stack' },
-    h('section', { class: 'card stack' }, h('h2', null, 'Есть другое предложение'), h('p', { class: 'muted' }, 'Запрошенные условия не проходят. Вот варианты, которые мы готовы одобрить, они проверены тем же расчётом.'),
+    h('section', { class: 'card stack' }, resultIcon('warn'), h('h2', null, 'Есть другое предложение'), h('p', { class: 'muted' }, 'Запрошенные условия не проходят. Вот варианты, которые мы готовы одобрить, они проверены тем же расчётом.'),
       d.expiresAt ? h('p', { class: 'hint' }, `Предложение действует до ${date(d.expiresAt)}`) : null,
-      d.alternatives.map((a) => {
+      d.alternatives.map((a, idx) => {
         const btn = h('button', { class: 'btn', type: 'button' }, 'Выбрать этот вариант');
         btn.addEventListener('click', async () => {
           btn.disabled = true;
@@ -157,6 +157,7 @@ function counterPanel(app, setApp) {
           catch (e) { toast(e.message, true); btn.disabled = false; }
         });
         return h('article', { class: 'card tight stack', style: { background: 'var(--bg)' } },
+          idx === 0 ? h('div', null, badge('Ближе всего к запросу', 'success')) : null,
           h('div', { class: 'row between' }, h('h3', null, PN[a.product] || 'Вариант'), h('b', { class: 'num' }, rub(a.amount))),
           h('ul', { class: 'plain small muted' }, diffs(app.request, a).map((t) => h('li', null, t))),
           h('div', { class: 'kv-row' },
@@ -189,13 +190,14 @@ function approvedPanel(app, setApp) {
     catch (e) { toast(e.message, true); btn.disabled = false; }
   });
   return h('div', { class: 'stack' },
-    h('section', { class: 'card stack' }, h('h2', null, 'Заявка одобрена'),
+    h('section', { class: 'card stack' }, resultIcon('ok'), h('h2', null, 'Заявка одобрена'),
       h('div', { class: 'kv-row' },
         h('div', { class: 'kv' }, h('b', null, rub(t.amount)), h('span', null, 'сумма')),
         h('div', { class: 'kv' }, h('b', null, rub(t.payment)), h('span', null, 'платёж в месяц')),
         h('div', { class: 'kv' }, h('b', null, pct1(t.rate)), h('span', null, 'ставка')),
         h('div', { class: 'kv' }, h('b', null, rub(t.overpayment)), h('span', null, 'переплата'))),
       d.expiresAt ? h('p', { class: 'hint' }, `Условия действуют до ${date(d.expiresAt)}`) : null,
+      scheduleBlock(t),
       h('div', { class: 'row' }, btn, twoStepButton('Отказаться', 'Точно отказаться?', 'btn line', async () => setApp((await post(`/applications/${app.id}/cancel`)).application)))),
     d.strengths?.length ? h('section', { class: 'card' }, reasonsBlock('Что сработало в вашу пользу', d.strengths)) : null);
 }
@@ -215,27 +217,30 @@ function signingPanel(app, setApp) {
     t ? h('div', { class: 'kv-row' },
       h('div', { class: 'kv' }, h('b', null, rub(t.amount)), h('span', null, 'сумма')), h('div', { class: 'kv' }, h('b', null, months(t.term)), h('span', null, 'срок')),
       h('div', { class: 'kv' }, h('b', null, pct1(t.rate)), h('span', null, 'ставка')), h('div', { class: 'kv' }, h('b', null, rub(t.payment)), h('span', null, 'платёж'))) : null,
+    scheduleBlock(t, true),
     h('label', { class: 'check', for: 'ok' }, ok, h('span', null, 'Я ознакомился с условиями договора и график платежей мне понятен')), btn);
 }
 
 function donePanel(app) {
   const t = app.acceptedTerms;
-  return h('section', { class: 'card stack' }, h('h2', null, 'Деньги на счёте'),
+  return h('section', { class: 'card stack' }, resultIcon('ok'), h('h2', null, 'Деньги на счёте'),
     h('p', null, `${rub(t.amount)} зачислены на расчётный счёт (имитация). Первый платёж: ${rub(t.payment)}.`),
     h('div', { class: 'kv-row' },
       h('div', { class: 'kv' }, h('b', null, rub(t.payment)), h('span', null, 'платёж в месяц')),
       h('div', { class: 'kv' }, h('b', null, rub(t.payment * t.term)), h('span', null, 'всего к возврату')),
       h('div', { class: 'kv' }, h('b', null, rub(t.overpayment)), h('span', null, 'переплата'))),
+    scheduleBlock(t),
     h('a', { class: 'btn ghost', href: '#/' }, 'На главную'));
 }
 
 function declinedPanel(app) {
   const d = app.decision;
   return h('div', { class: 'stack' },
-    h('section', { class: 'card stack' }, h('h2', null, 'Одобрить заявку сейчас не можем'),
+    h('section', { class: 'card stack' }, resultIcon('bad'), h('h2', null, 'Одобрить заявку сейчас не можем'),
       h('p', { class: 'muted' }, 'Ниже причины и шаги, которые могут изменить решение. Мы не раскрываем внутренние пороги, но показываем, на что влияют ваши данные.'),
-      reasonsBlock('Что повлияло на решение', d.reasons),
-      d.plan?.length ? h('div', { class: 'stack' }, h('h3', null, 'Что можно сделать'), h('ul', { class: 'plain' }, d.plan.map((p) => h('li', { class: 'change' }, p)))) : null,
+      d.reasons?.length ? reasonsBlock('Что повлияло на решение', d.reasons)
+        : h('p', null, 'Решение принял специалист банка по итогам проверки. Если хотите уточнить причину, подайте новую заявку с комментарием: мы ответим в кабинете.'),
+      d.plan?.length ? h('div', { class: 'stack' }, h('h3', null, 'Что можно сделать'), h('ol', { class: 'plan' }, d.plan.map((p) => h('li', null, p)))) : null,
       h('div', { class: 'row' }, h('a', { class: 'btn', href: `#/offer/${app.inn}` }, 'Рассчитать другие условия'), h('a', { class: 'btn ghost', href: '#/' }, 'На главную'))),
     d.strengths?.length ? h('section', { class: 'card' }, reasonsBlock('Что у вас в порядке', d.strengths)) : null);
 }
@@ -275,7 +280,7 @@ function draftPanel(app, setApp) {
   const employees = h('input', { class: 'input', id: 'emp', type: 'number', min: 0, value: state.employees, oninput: (e) => { state.employees = e.target.value; autosave(); } });
   const address = h('input', { class: 'input', id: 'addr', value: state.address, maxlength: 300, oninput: (e) => { state.address = e.target.value; autosave(); } });
   const comment = h('textarea', { class: 'input', id: 'cm', maxlength: 1000, oninput: (e) => { state.comment = e.target.value; autosave(); } }, state.comment);
-  const revenue = h('input', { class: 'input', id: 'rv', type: 'number', min: 0, value: state.revenue, oninput: (e) => { state.revenue = e.target.value; autosave(); } });
+  const revenue = moneyInput({ id: 'rv', value: state.revenue, placeholder: 'Например, 1 500 000' }, (v) => { state.revenue = v ?? ''; autosave(); });
   const consent = h('input', { type: 'checkbox', id: 'cs', checked: state.consent, onchange: (e) => { state.consent = e.target.checked; autosave.cancel(); save(); } });
 
   const docsBox = h('ul', { class: 'plain' });
@@ -289,7 +294,7 @@ function draftPanel(app, setApp) {
       } else {
         control = h('label', { class: 'btn line small' }, 'Приложить файл', h('input', { class: 'sr', type: 'file', 'aria-label': `Приложить: ${d.title}`, onchange: async (e) => { const f = e.target.files[0]; if (f) await attach(d.kind, f.name); } }));
       }
-      return h('li', { class: 'row between card tight', style: { background: 'var(--bg)' } }, h('div', null, h('b', null, d.title), h('div', { class: 'small muted' }, done ? 'Приложено' : 'Нужно приложить')), control);
+      return h('li', { class: 'row between card tight', id: `doc-${d.kind}`, tabindex: -1, style: { background: 'var(--bg)' } }, h('div', null, h('b', null, d.title), h('div', { class: 'small muted' }, done ? 'Приложено' : 'Нужно приложить')), control);
     }));
   }
   async function attach(kind, name) {
@@ -303,8 +308,16 @@ function draftPanel(app, setApp) {
   const submit = h('button', { class: 'btn', type: 'button' }, 'Отправить заявку');
   function drawReadiness() {
     clear(readyBox);
-    if (readiness.length) readyBox.append(h('div', { class: 'banner' }, h('div', null, h('b', null, 'Перед отправкой: '), h('ul', { class: 'plain' }, readiness.map((p) => h('li', null, p.message))))));
+    if (readiness.length) readyBox.append(h('div', { class: 'banner' }, h('div', null, h('b', null, `До отправки осталось: ${plural(readiness.length, 'шаг', 'шага', 'шагов')}`),
+      h('ul', { class: 'plain' }, readiness.map((p) => h('li', null, h('button', { class: 'link', type: 'button', onclick: () => jumpTo(p.field) }, p.message)))))));
+    else readyBox.append(h('div', { class: 'banner info' }, h('div', null, h('b', null, 'Всё готово. '), 'Проверьте данные и отправьте заявку.')));
     submit.disabled = readiness.length > 0;
+  }
+  function jumpTo(field) {
+    const el = field === 'consents' ? consent : document.getElementById(`doc-${String(field).replace(/^doc:/, '')}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.focus({ preventScroll: true });
   }
   submit.addEventListener('click', async () => {
     autosave.cancel(); submit.disabled = true;

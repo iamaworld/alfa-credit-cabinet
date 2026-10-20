@@ -91,7 +91,9 @@ function scoreFactors(ctx, req, product, rate) {
 
   // 1. Срок работы (ФНС / ЕГРЮЛ)
   const age = ctx.ageMonths;
-  const ageText = age >= 24 ? `${Math.floor(age / 12)} лет` : `${age} мес.`;
+  const years = Math.floor(age / 12), y10 = years % 10, y100 = years % 100;
+  const yWord = y10 === 1 && y100 !== 11 ? 'год' : y10 >= 2 && y10 <= 4 && (y100 < 12 || y100 > 14) ? 'года' : 'лет';
+  const ageText = age >= 24 ? `${years} ${yWord}` : `${age} мес.`;
   if (age < 6) add('company_age', 'ФНС', 'Срок работы бизнеса', ageText, -15, `Бизнес работает меньше полугода (${ageText}): банк осторожнее с такими заявками.`);
   else if (age < 12) add('company_age', 'ФНС', 'Срок работы бизнеса', ageText, -4, `Бизнес работает ${ageText}: история пока короткая.`);
   else if (age < 36) add('company_age', 'ФНС', 'Срок работы бизнеса', ageText, 6, `Бизнес работает ${ageText}: этого достаточно для оценки.`);

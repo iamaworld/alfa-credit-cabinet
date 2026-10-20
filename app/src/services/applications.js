@@ -465,7 +465,11 @@ export function createApplications({ db, config, enrichment, notifications, poli
       terms: action === 'approve' ? p.terms : null,
       alternatives: action === 'counter_offer' ? alternatives.map(({ id, product, amount, term, rate, payment, load, rationale }) => ({ id, product, amount, term, rate, payment, load, rationale })) : [],
     };
-    if (action === 'decline' && !clientView.plan?.length && p.explain) { clientView.reasons = clientView.reasons || []; }
+    if (action === 'decline' && !clientView.reasons?.length) {
+      // Например, отказ по заявке, где источники были недоступны: клиент не должен остаться без объяснения
+      clientView.reasons = [{ title: 'Решение специалиста банка', message: comment || 'Заявка не прошла ручную проверку.', direction: 'down' }];
+      if (!clientView.plan?.length) clientView.plan = ['Подайте новую заявку позже или с другими условиями: банк проверит данные заново.'];
+    }
     const payload = { ...p, outcome, terms: p.terms || null, alternatives, expiresAt, clientView, analyst: { by: analyst.login, action, comment, override } };
     tx(db, () => {
       stmt.insDecision.run(app.id, outcome, 'manual', ev?.score ?? null, ENGINE_VERSION, who, 1, json(payload), comment, nowIso());

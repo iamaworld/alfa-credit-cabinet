@@ -1,4 +1,4 @@
-import { h, clear, rub, pct1, pct0, months, meter, factorList, debounce, toast, skeleton } from '../ui.js';
+import { h, clear, rub, pct1, pct0, months, meter, factorList, debounce, toast, skeleton, moneyInput, paintRange, rateRange } from '../ui.js';
 import { get, post, patch, products } from '../api.js';
 import { go } from '../nav.js';
 
@@ -35,10 +35,10 @@ export async function offerPage(root, inn, params) {
   const termOut = h('output', { class: 'big-num', style: { 'font-size': '36px' } });
   const amountRange = h('input', { class: 'range', type: 'range', id: 'amount', 'aria-label': 'Сумма', step: 10000 });
   const termRange = h('input', { class: 'range', type: 'range', id: 'term', 'aria-label': 'Срок', step: 1 });
-  const amountNum = h('input', { class: 'input', type: 'number', inputmode: 'numeric', step: 10000, 'aria-label': 'Сумма точным числом' });
+  const amountNum = moneyInput({ id: 'amountNum' });
   const collateral = h('input', { type: 'checkbox', id: 'collateral' });
   const collateralRow = h('label', { class: 'check', for: 'collateral' }, collateral, h('span', null, h('b', null, 'Есть залог'), h('div', { class: 'hint' }, 'С обеспечением ставка ниже, а оценка выше.')));
-  const revenue = h('input', { class: 'input', type: 'number', inputmode: 'numeric', id: 'rev', min: 0, placeholder: 'Например, 1 500 000' });
+  const revenue = moneyInput({ id: 'rev', placeholder: 'Например, 1 500 000' }, (v) => { st.declaredRevenue = v; schedule(); });
   const revenueBox = h('div', { class: 'card tight stack', hidden: true },
     h('div', { class: 'field' }, h('label', { for: 'rev' }, 'Среднемесячная выручка за 6 месяцев, ₽'), revenue,
       h('p', { class: 'hint' }, 'Оборотов по счёту банк не видит. Выручка со слов учитывается с дисконтом, пока вы не подключите выписку.')));
@@ -51,7 +51,8 @@ export async function offerPage(root, inn, params) {
     const p = byId[st.product];
     amountRange.min = p.min; amountRange.max = p.max; amountRange.value = st.amount;
     termRange.min = p.minTerm; termRange.max = p.maxTerm; termRange.value = st.term;
-    amountNum.min = p.min; amountNum.max = p.max; amountNum.value = st.amount;
+    paintRange(amountRange); paintRange(termRange);
+    amountNum.setValue(st.amount);
     amountOut.textContent = rub(st.amount);
     termOut.textContent = months(st.term);
     collateral.checked = st.collateral;
@@ -72,15 +73,21 @@ export async function offerPage(root, inn, params) {
     } }, label));
   }
 
-  amountRange.addEventListener('input', () => { st.amount = Number(amountRange.value); amountNum.value = st.amount; amountOut.textContent = rub(st.amount); schedule(); });
-  amountNum.addEventListener('change', () => { st.amount = Number(amountNum.value) || st.amount; clamp(); syncControls(); schedule(); });
+  for (const r of [amountRange, termRange]) r.addEventListener('input', () => paintRange(r));
+  amountRange.addEventListener('input', () => { st.amount = Number(amountRange.value); amountNum.setValue(st.amount); amountOut.textContent = rub(st.amount); schedule(); });
+  amountNum.addEventListener('change', () => { st.amount = amountNum.getValue() || st.amount; clamp(); syncControls(); schedule(); });
+  amountNum.addEventListener('keydown', (e) => { if (e.key === 'Enter') amountNum.dispatchEvent(new Event('change')); });
   termRange.addEventListener('input', () => { st.term = Number(termRange.value); termOut.textContent = months(st.term); schedule(); });
   collateral.addEventListener('change', () => { st.collateral = collateral.checked; schedule(); });
-  revenue.addEventListener('input', () => { st.declaredRevenue = Number(revenue.value) || null; schedule(); });
-  if (st.declaredRevenue) revenue.value = st.declaredRevenue;
+  if (st.declaredRevenue) revenue.setValue(st.declaredRevenue);
 
   // ----- результат -----
   const result = h('div', { class: 'stack', 'aria-live': 'polite' });
+  // На телефоне итог расчёта уезжает под ползунки: держим платёж на виду отдельной плашкой
+  const miniPay = h('b', { class: 'num' });
+  const miniChance = h('span', { class: 'small muted' });
+  const mini = h('div', { class: 'mini-pay', 'aria-hidden': 'true' },
+    h('div', null, h('div', { class: 'small muted' }, 'Платёж в месяц'), miniPay), miniChance);
   const cta = h('button', { class: 'btn', type: 'button' }, draft ? 'Сохранить условия в заявке' : 'Оформить заявку');
   cta.addEventListener('click', async () => {
     cta.disabled = true;
@@ -118,11 +125,13 @@ export async function offerPage(root, inn, params) {
     const loadTone = r.load == null ? '' : r.load <= 0.35 ? 'ok' : r.load <= 0.5 ? 'mid' : 'bad';
     const fit = r.fit?.find((f) => f.recommended);
     fitNote.textContent = fit && st.purpose ? fit.reason : '';
+    miniPay.textContent = rub(r.payment);
+    miniChance.textContent = `Шанс: ${r.chanceLabel.toLowerCase()}`;
     clear(result).append(...[
       h('section', { class: 'card stack' },
         h('div', null, h('div', { class: 'label' }, 'Платёж в месяц'), h('div', { class: 'big-num pay' }, rub(r.payment))),
         h('div', { class: 'kv-row' },
-          h('div', { class: 'kv' }, h('b', null, `${pct1(r.rate.from)} – ${pct1(r.rate.to)}`), h('span', null, 'ставка (диапазон до проверки)')),
+          h('div', { class: 'kv' }, h('b', null, rateRange(r.rate)), h('span', null, 'ставка (диапазон до проверки)')),
           h('div', { class: 'kv' }, h('b', null, rub(r.overpayment)), h('span', null, 'переплата за весь срок'))),
         h('div', null,
           h('div', { class: 'row between' }, h('span', { class: 'label' }, 'Нагрузка на денежный поток'), h('b', null, r.load == null ? 'нет данных' : `${pct0(r.load)} · ${r.loadLabel}`)),
@@ -131,6 +140,7 @@ export async function offerPage(root, inn, params) {
         r.blockers.length ? h('div', { class: 'banner bad' }, h('div', null, r.blockers.map((b) => h('div', null, b.message)))) : null,
         r.missing?.length ? h('div', { class: 'banner info' }, h('div', null, r.missing.map((m) => h('div', null, h('b', null, 'Нужны данные: '), m.label, '. ', m.reason)))) : null,
         r.degraded ? h('div', { class: 'banner' }, h('div', null, 'Часть данных из сохранённой копии: источник недоступен.')) : null,
+        cat.autoDecisionLimit && st.amount > cat.autoDecisionLimit ? h('div', { class: 'banner info' }, h('div', null, h('b', null, 'Решение примет специалист. '), `Заявки больше ${rub(cat.autoDecisionLimit)} проверяет сотрудник банка, поэтому ответ придёт чуть позже. До ${rub(cat.autoDecisionLimit)} решение автоматическое, за пару минут.`)) : null,
         cta,
         h('p', { class: 'hint' }, r.disclaimer)),
       r.changes?.length ? h('section', { class: 'card stack' }, h('h3', null, 'Что изменилось и почему'),
@@ -154,12 +164,18 @@ export async function offerPage(root, inn, params) {
           h('div', { class: 'label' }, 'Продукт'), tabs),
         h('section', { class: 'card stack' },
           h('div', { class: 'row between' }, h('label', { class: 'label', for: 'amount' }, 'Сумма'), amountOut), amountRange,
-          h('div', { class: 'field' }, h('label', { class: 'label' }, 'Точная сумма, ₽'), amountNum),
+          h('div', { class: 'field' }, h('label', { class: 'label', for: 'amountNum' }, 'Точная сумма, ₽'), amountNum),
           h('div', { class: 'row between' }, h('label', { class: 'label', for: 'term' }, 'Срок'), termOut), termRange,
           rangeLabels, collateralRow),
         revenueBox),
-      h('div', { class: 'sticky' }, result)));
+      h('div', { class: 'sticky' }, result)),
+    mini);
   syncControls();
   await refresh();
-  return () => { schedule.cancel(); seq++; };
+  // Плашка не нужна, когда основной блок с платежом уже на экране
+  const toggleMini = () => { const r = result.getBoundingClientRect(); mini.hidden = r.top < window.innerHeight - 160 && r.bottom > 0; };
+  window.addEventListener('scroll', toggleMini, { passive: true });
+  window.addEventListener('resize', toggleMini);
+  toggleMini();
+  return () => { schedule.cancel(); seq++; window.removeEventListener('scroll', toggleMini); window.removeEventListener('resize', toggleMini); };
 }

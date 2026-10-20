@@ -1,4 +1,4 @@
-import { h, clear, rub, pct1, months, date, age, badge, meter, factorList, skeleton, toast } from '../ui.js';
+import { h, clear, rub, pct1, months, date, age, badge, meter, factorList, skeleton, toast, productIcon, rateRange, icon } from '../ui.js';
 import { get, post, products } from '../api.js';
 import { session, go } from '../nav.js';
 
@@ -63,24 +63,29 @@ async function renderCompany(root, company, all) {
 
   let hero;
   if (best) {
-    hero = h('section', { class: 'card hero' },
-      h('p', { class: 'muted' }, 'Вам предодобрено'),
-      h('div', { class: 'big-num' }, 'до ', rub(best.amount)),
+    hero = h('section', { class: 'card hero promo' },
+      h('span', { class: 'eyebrow' }, 'Предодобренное предложение'),
+      h('div', { class: 'big-num' }, h('span', { class: 'pre' }, 'до '), h('span', { class: 'nowrap' }, rub(best.amount))),
       h('p', null, `${pname[best.product]} на ${months(best.term)}, платёж около ${rub(best.payment)} в месяц`),
       h('div', { class: 'row' },
         h('a', { class: 'btn', href: `#/offer/${inn}?product=${best.product}&amount=${best.amount}&term=${best.term}` }, 'Настроить условия'),
         h('a', { class: 'btn ghost', href: `#/offer/${inn}` }, 'Подобрать под задачу')),
       h('div', { class: 'hero-meta' },
-        h('span', null, `Предложение действует до ${date(best.expiresAt)}`),
-        h('span', null, 'Ориентировочные условия. Итог — после проверки заявки.')));
+        h('span', { class: 'meta-i' }, icon('calendar', 18), `Действует до ${date(best.expiresAt)}`),
+        h('span', { class: 'meta-i' }, icon('lightning', 18), 'Решение онлайн, без визита в банк'),
+        h('span', null, 'Условия ориентировочные, итог — после проверки заявки.')));
   } else {
-    hero = h('section', { class: 'card hero' },
-      h('h2', null, 'Предодобренного лимита пока нет'),
-      h('p', { class: 'muted' }, info.summary.hasCurrentOverdue ? 'Есть текущая просрочка по кредиту: пока она не закрыта, лимит недоступен.' : company.status !== 'ACTIVE' ? 'Компания не числится действующей.' : 'По имеющимся данным лимит рассчитать не удалось.'),
-      h('div', { class: 'row' }, h('a', { class: 'btn', href: `#/offer/${inn}` }, 'Рассчитать условия самому')));
+    const inactive = company.status !== 'ACTIVE';
+    hero = h('section', { class: 'card hero stack' },
+      h('h2', null, inactive ? 'Кредит для этой компании недоступен' : 'Предодобренного лимита пока нет'),
+      h('p', { class: 'muted' }, inactive ? 'По данным реестра компания в процессе ликвидации или прекратила деятельность. Банк не выдаёт кредиты таким компаниям, поэтому расчёт условий здесь не поможет.'
+        : info.summary.hasCurrentOverdue ? 'Есть текущая просрочка по кредиту: пока она не закрыта, лимит недоступен. После погашения лимит пересчитается автоматически.'
+          : 'По имеющимся данным лимит рассчитать не удалось. Можно подобрать условия самостоятельно: банк проверит заявку.'),
+      inactive ? h('p', { class: 'hint' }, 'Если статус в реестре изменится, предложения появятся здесь сами.')
+        : h('div', { class: 'row' }, h('a', { class: 'btn', href: `#/offer/${inn}` }, 'Рассчитать условия самому')));
   }
 
-  const productCards = h('div', { class: 'grid cols-3' }, offers.offers.map((o) => productCard(o, pname[o.product], inn)));
+  const productCards = company.status !== 'ACTIVE' ? null : h('div', { class: 'grid cols-3' }, offers.offers.map((o) => productCard(o, pname[o.product], inn)));
 
   const attention = myApps.filter((a) => ['needs_info', 'counter_offer', 'approved', 'signing'].includes(a.status));
   const appStrip = myApps.length ? h('section', { class: 'card' },
@@ -92,10 +97,12 @@ async function renderCompany(root, company, all) {
   const quest = feed.items.find((i) => i.kind === 'quest');
   const rest = feed.items.filter((i) => i.kind !== 'quest');
 
-  root.append(...[head, degraded, hero,
+  const attentionBox = attention.length ? h('div', { class: 'banner info' }, h('div', { style: { display: 'grid', gap: '6px' } }, h('b', null, 'Нужно ваше действие'),
+    attention.map((a) => h('a', { class: 'link', href: `#/applications/${a.id}` }, `${a.number}: ${a.statusTitle.toLowerCase()}`)))) : null;
+
+  root.append(...[head, attentionBox, degraded, hero,
     h('div', { class: 'stack' },
-      attention.length ? h('div', { class: 'banner info' }, h('div', null, h('b', null, 'Нужно ваше действие: '), attention.map((a) => a.number).join(', '), '. Откройте заявку ниже.')) : null,
-      h('h2', null, 'Предложения по продуктам'),
+      productCards ? h('h2', null, 'Предложения по продуктам') : null,
       productCards,
       appStrip,
       h('div', { class: 'split-even split' },
@@ -106,14 +113,15 @@ async function renderCompany(root, company, all) {
 
 function productCard(o, name, inn) {
   if (!o.available) {
-    return h('article', { class: 'card product off' }, h('h3', null, name), h('p', { class: 'muted' }, 'Сейчас недоступен: по текущим данным лимит не рассчитан. Загляните в «Готовность к кредиту» и в редактор условий.'),
+    return h('article', { class: 'card product off' }, productIcon(o.product), h('h3', null, name), h('p', { class: 'muted' }, 'Предодобренного лимита нет. Посмотрите блок «Готовность к кредиту» ниже или рассчитайте условия сами.'),
       h('a', { class: 'btn line small', href: `#/offer/${inn}?product=${o.product}` }, 'Рассчитать самому'));
   }
   return h('article', { class: 'card product' },
+    productIcon(o.product),
     h('h3', null, name),
     h('div', { class: 'amount' }, 'до ', rub(o.amount)),
-    h('div', { class: 'small muted' }, `${months(o.term)} · ставка ${pct1(o.rate.from)} – ${pct1(o.rate.to)} · платёж ~${rub(o.payment)}`),
-    h('a', { class: 'btn small', href: `#/offer/${inn}?product=${o.product}&amount=${o.amount}&term=${o.term}` }, 'Настроить'),
+    h('div', { class: 'small muted' }, `${months(o.term)} · ставка ${rateRange(o.rate)} · платёж ~${rub(o.payment)}`),
+    h('a', { class: 'btn small ghost', href: `#/offer/${inn}?product=${o.product}&amount=${o.amount}&term=${o.term}` }, 'Настроить'),
     h('details', { class: 'why' }, h('summary', null, 'Почему такой лимит'),
       h('div', { class: 'stack', style: { 'margin-top': '12px' } },
         factorList(o.why.map((f) => ({ title: f.title, message: f.message, direction: f.direction }))),

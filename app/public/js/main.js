@@ -1,4 +1,4 @@
-import { h, clear, toast } from './ui.js';
+import { h, clear, toast, icon } from './ui.js';
 import { get, post, setUnauthorizedHandler, ApiError } from './api.js';
 import { loginPage } from './pages/login.js';
 import { homePage } from './pages/home.js';
@@ -26,8 +26,10 @@ function shell(content, active) {
       h('div', { class: 'top-right' },
         analyst ? null : bellWidget(),
         h('div', { class: 'who' }, h('b', null, u.name), h('span', null, analyst ? 'Аналитик' : 'Клиент')),
-        h('button', { class: 'btn ghost small', onclick: logout }, 'Выйти')))),
-    h('main', { class: 'page', id: 'main' }, content));
+        h('button', { class: 'btn ghost small logout', onclick: logout, 'aria-label': 'Выйти' }, icon('door', 20), h('span', { class: 'lbl' }, 'Выйти'))))),
+    h('main', { class: 'page', id: 'main' }, content),
+    // На телефоне верхняя навигация не помещается: дублируем разделы нижней панелью
+    links.length > 1 ? h('nav', { class: 'tabbar', 'aria-label': 'Разделы' }, links.map(([href, text]) => h('a', { href, 'aria-current': active === href ? 'page' : null }, icon(href === '#/' ? 'house' : 'document', 22), h('span', null, text)))) : null);
 }
 
 async function logout() {

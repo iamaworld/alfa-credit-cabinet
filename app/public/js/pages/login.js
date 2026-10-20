@@ -8,26 +8,26 @@ export async function loginPage(root) {
   const pass = h('input', { class: 'input', id: 'password', name: 'password', type: 'password', autocomplete: 'current-password', required: true });
   const err = h('p', { class: 'err', role: 'alert' });
   const submit = h('button', { class: 'btn', type: 'submit' }, 'Войти');
+  async function signIn() {
+    err.textContent = '';
+    submit.disabled = true;
+    try {
+      const r = await post('/auth/login', { login: login.value, password: pass.value });
+      session.user = r.user;
+      go(r.user.role === 'analyst' ? '#/analyst' : '#/');
+    } catch (x) { err.textContent = x.message; } finally { submit.disabled = false; }
+  }
   const form = h('form', { class: 'card stack', novalidate: true,
-    onsubmit: async (e) => {
-      e.preventDefault();
-      err.textContent = '';
-      submit.disabled = true;
-      try {
-        const r = await post('/auth/login', { login: login.value, password: pass.value });
-        session.user = r.user;
-        go(r.user.role === 'analyst' ? '#/analyst' : '#/');
-      } catch (x) { err.textContent = x.message; } finally { submit.disabled = false; }
-    } },
+    onsubmit: (e) => { e.preventDefault(); signIn(); } },
     h('h2', null, 'Вход в кабинет'),
     h('div', { class: 'field' }, h('label', { for: 'login' }, 'Логин'), login),
     h('div', { class: 'field' }, h('label', { for: 'password' }, 'Пароль'), pass),
     err, submit);
 
   const accounts = demo.enabled ? h('div', { class: 'stack' },
-    h('div', null, h('h3', null, 'Тестовые аккаунты'), h('p', { class: 'hint' }, `Нажмите, чтобы подставить логин. Пароль у всех: ${demo.password}. Все данные вымышлены.`)),
-    demo.accounts.map((a) => h('button', { class: 'acc', type: 'button', onclick: () => { login.value = a.login; pass.value = demo.password; pass.focus(); } },
-      h('b', null, `${a.scenario} · ${a.company || a.name}`), h('small', null, a.hint)))) : null;
+    h('div', null, h('h3', null, 'Тестовые аккаунты'), h('p', { class: 'hint' }, `Нажмите на карточку, чтобы сразу войти. Пароль у всех: ${demo.password}. Все данные вымышлены.`)),
+    demo.accounts.map((a) => h('button', { class: 'acc', type: 'button', onclick: () => { login.value = a.login; pass.value = demo.password; signIn(); } },
+      h('b', null, `${a.scenario} · ${a.company || a.name}`), h('small', null, `Логин ${a.login}. ${a.hint}`)))) : null;
 
   root.append(h('div', { class: 'login' },
     h('section', { class: 'login-l' },

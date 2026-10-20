@@ -1,10 +1,10 @@
-import { h, clear, dateTime } from '../ui.js';
+import { h, clear, dateTime, icon } from '../ui.js';
 import { get, post } from '../api.js';
 import { go } from '../nav.js';
 
 export function bellWidget() {
   const n = h('span', { class: 'bell-n', hidden: true }, '0');
-  const btn = h('button', { class: 'btn ghost small bell', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-label': 'Уведомления' }, 'Уведомления', n);
+  const btn = h('button', { class: 'btn ghost small bell', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-label': 'Уведомления' }, bellIcon(), h('span', { class: 'lbl' }, 'Уведомления'), n);
   const wrap = h('div', { class: 'bell' }, btn);
   let panel = null;
   async function refresh() {
@@ -35,3 +35,5 @@ export function bellWidget() {
   const t = setInterval(() => { if (!document.body.contains(wrap)) clearInterval(t); else refresh(); }, 5000);
   return wrap;
 }
+
+function bellIcon() { return icon('bell', 20); }

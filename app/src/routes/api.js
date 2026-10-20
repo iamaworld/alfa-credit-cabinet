@@ -6,6 +6,7 @@ import { parseInn, parseRequest } from '../util/validate.js';
 import { PRODUCTS, PURPOSES, ENGINE_VERSION } from '../engine/products.js';
 import { preview, preapprovedOffers, productFit, OFFER_VALID_DAYS } from '../engine/offer.js';
 import { buildFeed } from '../services/feed.js';
+import { DEFAULT_POLICY } from '../engine/decision.js';
 import { idempotent } from '../util/idempotency.js';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '../seed.js';
 
@@ -57,7 +58,7 @@ export function createApi({ db, config, apps, contexts, notifications, enrichmen
 
   // ----- справочник -----
   r.get('/products', (_req, res) => {
-    res.json({ engineVersion: ENGINE_VERSION, purposes: PURPOSES, products: Object.values(PRODUCTS).map(({ id, name, short, description, min, max, minTerm, maxTerm, defaultTerm, securedByPurchase, documents }) => ({ id, name, short, description, min, max, minTerm, maxTerm, defaultTerm, securedByPurchase, documents })) });
+    res.json({ engineVersion: ENGINE_VERSION, autoDecisionLimit: DEFAULT_POLICY.autoDecisionLimit, purposes: PURPOSES, products: Object.values(PRODUCTS).map(({ id, name, short, description, min, max, minTerm, maxTerm, defaultTerm, securedByPurchase, documents }) => ({ id, name, short, description, min, max, minTerm, maxTerm, defaultTerm, securedByPurchase, documents })) });
   });
 
   // ----- компании -----
