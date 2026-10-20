@@ -1,0 +1,40 @@
+# Запуск: docker compose up --build   →   http://localhost:3000
+name: credit-cabinet
+
+x-mock: &mock
+  build: { context: ., dockerfile: mocks/Dockerfile }
+  restart: unless-stopped
+
+services:
+  mock-fns:
+    <<: *mock
+    command: ["fns"]
+    environment: { PORT: "4001" }
+  mock-bki:
+    <<: *mock
+    command: ["bki"]
+    environment: { PORT: "4002" }
+  mock-statement:
+    <<: *mock
+    command: ["statement"]
+    environment: { PORT: "4003" }
+
+  app:
+    build: { context: ., dockerfile: app/Dockerfile }
+    restart: unless-stopped
+    ports: ["${APP_PORT:-3000}:3000"]
+    environment:
+      APP_SECRET: ${APP_SECRET:-dev-only-secret-change-me}
+      SEED: ${SEED:-1}
+      STAGE_DELAY_MS: ${STAGE_DELAY_MS:-1800}
+      FNS_URL: http://mock-fns:4001
+      BKI_URL: http://mock-bki:4002
+      STATEMENT_URL: http://mock-statement:4003
+    volumes: ["cabinet-data:/srv/data"]
+    depends_on:
+      mock-fns: { condition: service_healthy }
+      mock-bki: { condition: service_healthy }
+      mock-statement: { condition: service_healthy }
+
+volumes:
+  cabinet-data:
