@@ -1,4 +1,4 @@
-import { h, clear, rub, pct1, pct0, months, dateTime, date, badge, meter, factorList, debounce, toast, skeleton, newKey, moneyInput, scheduleBlock, plural, resultIcon } from '../ui.js';
+import { h, clear, rub, pct1, pct0, months, dateTime, date, badge, meter, factorList, debounce, toast, skeleton, newKey, moneyInput, scheduleBlock, plural, resultIcon, stackable } from '../ui.js';
 import { get, post, patch, put, products } from '../api.js';
 import { go } from '../nav.js';
 
@@ -11,11 +11,11 @@ export async function applicationsPage(root) {
   const { applications } = await get('/applications');
   clear(root).append(
     h('div', { class: 'page-head' }, h('h1', null, 'Заявки'), applications.length ? h('a', { class: 'btn', href: '#/' }, 'Новая заявка') : null),
-    applications.length ? h('div', { class: 'card scroll-x' }, h('table', { class: 'tbl' },
+    applications.length ? h('div', { class: 'card scroll-x' }, stackable(h('table', { class: 'tbl' },
       h('thead', null, h('tr', null, ['Номер', 'Продукт', 'Сумма', 'Срок', 'Статус', 'Обновлена'].map((t) => h('th', null, t)))),
       h('tbody', null, applications.map((a) => h('tr', { class: 'click', tabindex: 0, onclick: () => go(`#/applications/${a.id}`), onkeydown: (e) => { if (e.key === 'Enter') go(`#/applications/${a.id}`); } },
         h('td', null, h('b', null, a.number)), h('td', null, a.productName), h('td', { class: 'num' }, rub(a.amount)), h('td', null, months(a.term)),
-        h('td', null, badge(a.statusTitle, TONE[a.tone])), h('td', { class: 'muted small' }, dateTime(a.updatedAt))))))) :
+        h('td', null, badge(a.statusTitle, TONE[a.tone])), h('td', { class: 'muted small' }, dateTime(a.updatedAt)))))))) :
       h('div', { class: 'card stack' }, h('h2', null, 'Заявок пока нет'), h('p', { class: 'muted' }, 'Подберите условия на главной и оформите первую заявку.'), h('a', { class: 'btn', href: '#/' }, 'Перейти на главную')));
   return undefined;
 }
@@ -126,8 +126,10 @@ function infoPanel(app, setApp) {
           toast('Ответ отправлен. Продолжаем проверку.');
         } catch (e) { err.textContent = e.message; btn.disabled = false; }
       });
+      // Вопрос приходит одной строкой «Что нужно. Почему»: первое предложение — заголовок, остальное — пояснение
+      const [ask, ...why] = q.question.split(/(?<=\.)\s+/);
       return h('div', { class: 'card tight stack', style: { background: 'var(--bg)' } },
-        h('label', { for: `q${q.id}` }, h('b', null, q.question)), input, err, btn);
+        h('label', { for: `q${q.id}` }, h('b', null, ask), why.length ? h('div', { class: 'small muted' }, why.join(' ')) : null), input, err, btn);
     }));
 }
 
@@ -220,7 +222,7 @@ function signingPanel(app, setApp) {
     t ? h('div', { class: 'kv-row' },
       h('div', { class: 'kv' }, h('b', null, rub(t.amount)), h('span', null, 'сумма')), h('div', { class: 'kv' }, h('b', null, months(t.term)), h('span', null, 'срок')),
       h('div', { class: 'kv' }, h('b', null, pct1(t.rate)), h('span', null, 'ставка')), h('div', { class: 'kv' }, h('b', null, rub(t.payment)), h('span', null, 'платёж'))) : null,
-    scheduleBlock(t, true),
+    scheduleBlock(t, window.matchMedia('(min-width: 901px)').matches),
     h('label', { class: 'check', for: 'ok' }, ok, h('span', null, 'Я ознакомился с условиями договора и график платежей мне понятен')), btn);
 }
 

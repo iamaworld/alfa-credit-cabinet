@@ -104,6 +104,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .field > label, .label { font-size: 14px; line-height: 20px; color: var(--muted); font-weight: 400; }
 .input, textarea.input, select.input { width: 100%; min-height: 56px; padding: 16px; border: 1px solid transparent; background: var(--bg); border-radius: var(--r-in); outline: none; font-size: 16px; transition: background .15s, border-color .15s; }
 .input:hover { background: var(--line); }
+/* поле внутри серой плитки должно отличаться от неё */
+.card.tight .input { background: var(--card); }
+.card.tight .input:hover { background: #FAFAFB; }
 textarea.input { min-height: 104px; resize: vertical; }
 .input:focus { border-color: var(--line-strong); background: #fff; box-shadow: 0 0 0 1px var(--graphite) inset; }
 .input[aria-invalid='true'] { box-shadow: 0 0 0 1px var(--bad) inset; background: var(--bad-soft); }
@@ -304,6 +307,7 @@ ol.plan li::before { content: counter(plan); width: 28px; height: 28px; border-r
 .checklist { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); column-gap: 24px; }
 .feed-item > * + * { margin-top: 6px; }
 h1 + p, h2 + p, .page-head h1 + p { margin-top: 8px; }
+h3 + p, h3 + .hint { margin-top: 4px; }
 details.why > * + * { margin-top: 12px; }
 .label + .big-num { margin-top: 6px; }
 .row + .meter { margin-top: 10px; }
@@ -331,8 +335,13 @@ ul.plain:first-child, ol.plan:first-child, .timeline:first-child { margin-top: 0
   .factor-cols { grid-template-columns: minmax(0, 1fr); }
   .app-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'main' 'side' 'timeline'; gap: 16px; }
   .sticky { position: static; }
-  .login-l { padding: 32px var(--gutter) 40px; min-height: 0; }
-  .login-l h1 { font-size: 40px; }
+  /* на телефоне панель входа компактная: форма и тестовые аккаунты видны на первом экране */
+  .login-l { padding: 20px var(--gutter) 24px; min-height: 0; gap: 16px; }
+  .login-l h1 { font-size: 28px; line-height: 1.15; max-width: none; }
+  .login-l .muted { font-size: 15px; }
+  .login-l > .hint { display: none; }
+  .login-l::before { width: 360px; height: 360px; right: -180px; bottom: -200px; }
+  .login-l::after { display: none; }
   .login-r { padding: 24px var(--gutter) 48px; max-width: none; }
   .nav { display: none; }
   .who { display: none; }
@@ -363,6 +372,15 @@ ul.plain:first-child, ol.plan:first-child, .timeline:first-child { margin-top: 0
   .chips::-webkit-scrollbar, .tabs::-webkit-scrollbar { display: none; }
   .chip, .tab { flex: none; white-space: nowrap; }
   .chips.wrap { flex-wrap: wrap; overflow: visible; margin-left: 0; margin-right: 0; padding: 0; }
+  .tbl.stackable thead { display: none; }
+  .tbl.stackable, .tbl.stackable tbody { display: block; }
+  .tbl.stackable tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .tbl.stackable tr:last-child { border-bottom: 0; }
+  .tbl.stackable td { display: block; padding: 0; border: 0; white-space: normal; min-width: 0 !important; }
+  .tbl.stackable td:first-child { grid-column: 1 / -1; }
+  .tbl.stackable td:not(:first-child)::before { content: attr(data-label); display: block; font-size: 12px; line-height: 16px; color: var(--muted); margin-bottom: 2px; }
+  .tbl.stackable tr.click:hover td { background: none; }
+  .tbl.stackable td.num { text-align: left; }
   .mini-pay { display: flex; align-items: center; justify-content: space-between; gap: 12px; position: fixed; left: 12px; right: 12px; bottom: 80px; z-index: 24;
     background: var(--graphite); color: #fff; padding: 10px 16px; border-radius: 16px; box-shadow: var(--shadow-m); }
   .mini-pay .muted { color: rgba(255, 255, 255, .7); }

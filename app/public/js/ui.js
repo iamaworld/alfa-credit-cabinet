@@ -147,3 +147,11 @@ export function paintRange(el) {
 export function resultIcon(kind) {
   return h('div', { class: `result-ico ${kind}` }, icon(kind === 'ok' ? 'check' : kind === 'bad' ? 'cross' : 'exclamation', 32));
 }
+
+// На телефоне строки таблицы показываются карточками: каждой ячейке нужна подпись её колонки
+export function stackable(table) {
+  const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent);
+  for (const tr of table.querySelectorAll('tbody tr')) [...tr.children].forEach((td, i) => { td.dataset.label = heads[i] || ''; });
+  table.classList.add('stackable');
+  return table;
+}

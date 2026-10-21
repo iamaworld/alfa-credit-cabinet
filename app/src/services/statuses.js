@@ -19,8 +19,8 @@ export const TRANSITIONS = {
 export const TERMINAL = new Set(['disbursed', 'declined', 'cancelled', 'expired']);
 export const IN_PIPELINE = new Set(['submitted', 'checking', 'enrichment', 'scoring']);
 
-// stage — шаг на полосе прогресса: 0 Заявка, 1 Проверка, 2 Решение, 3 Подписание, 4 Деньги
-export const STAGES = ['Заявка', 'Проверка', 'Решение', 'Подписание', 'Деньги'];
+// stage — шаг на полосе прогресса: 0 Заявка, 1 Проверка, 2 Решение, 3 Договор, 4 Деньги
+export const STAGES = ['Заявка', 'Проверка', 'Решение', 'Договор', 'Деньги'];
 
 export const STATUS_VIEW = {
   draft:         { stage: 0, tone: 'neutral', title: 'Черновик', text: 'Заявка заполнена не до конца. Изменения сохраняются автоматически.', next: 'Заполните поля, приложите документы и отправьте заявку.' },

@@ -1,4 +1,4 @@
-import { h, clear, rub, pct1, pct0, months, dateTime, age, badge, meter, skeleton, toast } from '../ui.js';
+import { h, clear, rub, pct1, pct0, months, dateTime, age, badge, meter, skeleton, toast, stackable } from '../ui.js';
 import { get, post } from '../api.js';
 import { go } from '../nav.js';
 
@@ -22,7 +22,7 @@ export async function analystQueuePage(root) {
       h('section', { class: 'card scroll-x stack' }, h('h2', null, 'Последние заявки'), d.recent.length ? table(d.recent, false) : h('p', { class: 'muted' }, 'Заявок пока нет.')));
   }
   function table(rows, inQueue) {
-    return h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Заявка', 'Клиент', 'Продукт', 'Рекомендация движка', inQueue ? 'Почему у человека' : 'Статус', inQueue ? 'Ждёт' : 'Обновлена'].map((t) => h('th', null, t)))),
+    return stackable(h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Заявка', 'Клиент', 'Продукт', 'Рекомендация движка', inQueue ? 'Почему у человека' : 'Статус', inQueue ? 'Ждёт' : 'Обновлена'].map((t) => h('th', null, t)))),
       h('tbody', null, rows.map((r) => h('tr', { class: 'click', tabindex: 0, onclick: () => go(`#/analyst/${r.id}`), onkeydown: (e) => { if (e.key === 'Enter') go(`#/analyst/${r.id}`); } },
         h('td', { class: 'nowrap' }, h('b', null, r.number), h('div', { class: 'small muted' }, `ИНН ${r.inn}`)),
         h('td', { class: 'nowrap' }, r.client),
@@ -32,7 +32,7 @@ export async function analystQueuePage(root) {
           r.score != null ? h('div', { style: { 'margin-top': '8px' } }, meter(r.score, 100, r.score >= r.threshold ? 'ok' : 'bad')) : null,
           r.degraded ? h('div', { class: 'small muted' }, 'данные из кэша') : null),
         h('td', { class: 'small', style: { 'min-width': inQueue ? '200px' : '140px' } }, inQueue ? (r.reasons[0] || '—') : r.statusTitle),
-        h('td', { class: 'small muted nowrap' }, inQueue ? waiting(r.submittedAt || r.updatedAt) : dateTime(r.updatedAt))))));
+        h('td', { class: 'small muted nowrap' }, inQueue ? waiting(r.submittedAt || r.updatedAt) : dateTime(r.updatedAt)))))));
   }
   await load();
   timer = setInterval(() => load().catch(() => {}), 5000);
