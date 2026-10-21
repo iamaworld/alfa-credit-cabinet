@@ -115,7 +115,7 @@ textarea.input { min-height: 104px; resize: vertical; }
 .check input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--accent); flex: none; }
 
 /* ---------- статусы (Status) и мелкие элементы ---------- */
-.badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 8px; font-size: 14px; line-height: 20px; font-weight: 500; background: var(--fill); color: var(--ink); white-space: nowrap; }
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 8px; font-size: 14px; line-height: 20px; font-weight: 500; background: var(--fill); color: var(--ink); max-width: 100%; }
 .badge.success { background: var(--ok-soft); color: var(--ok); }
 .badge.danger { background: var(--bad-soft); color: var(--bad); }
 .badge.action { background: var(--warn-soft); color: #B8620A; }
@@ -362,6 +362,7 @@ ul.plain:first-child, ol.plan:first-child, .timeline:first-child { margin-top: 0
   .chips { margin-left: -20px; margin-right: -20px; padding: 0 20px; }
   .chips::-webkit-scrollbar, .tabs::-webkit-scrollbar { display: none; }
   .chip, .tab { flex: none; white-space: nowrap; }
+  .chips.wrap { flex-wrap: wrap; overflow: visible; margin-left: 0; margin-right: 0; padding: 0; }
   .mini-pay { display: flex; align-items: center; justify-content: space-between; gap: 12px; position: fixed; left: 12px; right: 12px; bottom: 80px; z-index: 24;
     background: var(--graphite); color: #fff; padding: 10px 16px; border-radius: 16px; box-shadow: var(--shadow-m); }
   .mini-pay .muted { color: rgba(255, 255, 255, .7); }

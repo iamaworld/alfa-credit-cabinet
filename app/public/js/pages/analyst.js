@@ -22,15 +22,17 @@ export async function analystQueuePage(root) {
       h('section', { class: 'card scroll-x stack' }, h('h2', null, 'Последние заявки'), d.recent.length ? table(d.recent, false) : h('p', { class: 'muted' }, 'Заявок пока нет.')));
   }
   function table(rows, inQueue) {
-    return h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Заявка', 'Клиент', 'Продукт', 'Рекомендация', 'Оценка', inQueue ? 'Почему у человека' : 'Статус', 'Ждёт'].map((t) => h('th', null, t)))),
+    return h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Заявка', 'Клиент', 'Продукт', 'Рекомендация движка', inQueue ? 'Почему у человека' : 'Статус', inQueue ? 'Ждёт' : 'Обновлена'].map((t) => h('th', null, t)))),
       h('tbody', null, rows.map((r) => h('tr', { class: 'click', tabindex: 0, onclick: () => go(`#/analyst/${r.id}`), onkeydown: (e) => { if (e.key === 'Enter') go(`#/analyst/${r.id}`); } },
-        h('td', null, h('b', null, r.number), h('div', { class: 'small muted' }, `ИНН ${r.inn}`)),
-        h('td', null, r.client),
-        h('td', null, r.productName, h('div', { class: 'small muted num' }, `${rub(r.amount)} · ${months(r.term)}`)),
-        h('td', null, r.recommendation ? outcomeBadge(r.recommendation) : '—', r.degraded ? h('div', { class: 'small muted' }, 'данные из кэша') : null),
-        h('td', { style: { 'min-width': '140px' } }, r.score != null ? h('div', null, h('b', { class: 'num' }, `${r.score}`), h('span', { class: 'muted' }, ` / порог ${r.threshold}`), meter(r.score, 100, r.score >= r.threshold ? 'ok' : 'bad')) : '—'),
-        h('td', { class: 'small' }, inQueue ? (r.reasons[0] || '—') : r.statusTitle),
-        h('td', { class: 'small muted' }, waiting(r.submittedAt || r.updatedAt))))));
+        h('td', { class: 'nowrap' }, h('b', null, r.number), h('div', { class: 'small muted' }, `ИНН ${r.inn}`)),
+        h('td', { class: 'nowrap' }, r.client),
+        h('td', { class: 'nowrap' }, r.productName, h('div', { class: 'small muted num' }, `${rub(r.amount)}, ${months(r.term)}`)),
+        h('td', { style: { 'min-width': '150px' } },
+          h('div', { class: 'row', style: { gap: '8px' } }, r.recommendation ? outcomeBadge(r.recommendation) : '—', r.score != null ? h('span', { class: 'small muted num nowrap' }, `${r.score} / ${r.threshold}`) : null),
+          r.score != null ? h('div', { style: { 'margin-top': '8px' } }, meter(r.score, 100, r.score >= r.threshold ? 'ok' : 'bad')) : null,
+          r.degraded ? h('div', { class: 'small muted' }, 'данные из кэша') : null),
+        h('td', { class: 'small', style: { 'min-width': inQueue ? '200px' : '140px' } }, inQueue ? (r.reasons[0] || '—') : r.statusTitle),
+        h('td', { class: 'small muted nowrap' }, inQueue ? waiting(r.submittedAt || r.updatedAt) : dateTime(r.updatedAt))))));
   }
   await load();
   timer = setInterval(() => load().catch(() => {}), 5000);
@@ -105,10 +107,13 @@ function caseView(d, act) {
       h('time', null, dateTime(e.ts), h('span', { class: 'who-tag' }, e.actor)),
       e.publicText || TYPE[e.type] || e.type, e.internalText ? h('div', { class: 'internal' }, e.internalText) : null))));
 
+  // Справа залипает только панель решения; длинный журнал — слева под данными, иначе его низ не прокрутить
   return h('div', null, head,
-    h('div', { class: 'split' },
-      h('div', { class: 'stack' }, request, engine, sources, infos),
-      h('div', { class: 'stack sticky' }, d.canAct ? actionPanel(d, act) : h('section', { class: 'card' }, h('p', { class: 'muted' }, 'Эта заявка не ждёт решения аналитика.')), audit)));
+    h('div', { class: 'app-grid' },
+      h('div', { class: 'stack app-main' }, request, engine, sources, infos),
+      h('aside', { class: 'app-side' }, h('div', { class: 'sticky' }, d.canAct ? actionPanel(d, act)
+        : h('section', { class: 'card stack' }, h('h3', null, 'Решение не требуется'), h('p', { class: 'muted' }, `Статус: ${a.statusTitle.toLowerCase()}. Действия аналитика доступны, когда заявка на ручной проверке.`)))),
+      h('div', { class: 'app-timeline' }, audit)));
 }
 
 function factorRow(f) {
@@ -128,7 +133,7 @@ function actionPanel(d, act) {
   const altSel = h('select', { class: 'input', 'aria-label': 'Вариант' }, h('option', { value: '' }, 'Все подходящие варианты'), (dec?.alternatives || []).map((x) => h('option', { value: x.id }, `${rub(x.amount)}, ${months(x.term)}`)));
   const altBox = h('div', { class: 'field', hidden: true }, h('label', null, 'Что предложить клиенту'), altSel);
   const submit = h('button', { class: 'btn', type: 'button' }, 'Записать решение');
-  const tabs = h('div', { class: 'tabs', role: 'tablist' });
+  const tabs = h('div', { class: 'chips wrap', role: 'group', 'aria-label': 'Действие' });
   const opts = [['approve', 'Одобрить'], ['counter_offer', 'Другие условия'], ['request_info', 'Запросить данные'], ['decline', 'Отказать'], ['rerun', 'Повторить проверку']];
   const hints = {
     approve: hardStop ? 'Есть жёсткий стоп-фактор: одобрение недоступно.' : (dec?.evaluation?.margin ?? 0) < 0 ? 'Оценка ниже порога: это исключение из политики, оно будет помечено в журнале.' : 'Условия будут рассчитаны движком по запрошенным параметрам.',
@@ -138,12 +143,12 @@ function actionPanel(d, act) {
     rerun: 'Данные запрашиваются заново. Используйте после сбоя источника.',
   };
   function paint() {
-    for (const b of tabs.children) b.setAttribute('aria-selected', String(b.dataset.a === action));
+    for (const b of tabs.children) b.setAttribute('aria-pressed', String(b.dataset.a === action));
     hint.textContent = hints[action];
     altBox.hidden = action !== 'counter_offer' || !(dec?.alternatives || []).length;
     submit.disabled = (action === 'approve' && hardStop) || (noData && !['rerun', 'decline', 'request_info'].includes(action));
   }
-  for (const [a, t] of opts) tabs.append(h('button', { class: 'tab', role: 'tab', 'data-a': a, onclick: () => { action = a; paint(); } }, t));
+  for (const [a, t] of opts) tabs.append(h('button', { class: 'chip', type: 'button', 'data-a': a, onclick: () => { action = a; paint(); } }, t));
   submit.addEventListener('click', async () => { submit.disabled = true; await act({ action, comment: comment.value, altId: altSel.value || undefined }); paint(); });
   paint();
   return h('section', { class: 'card stack' }, h('h3', null, 'Решение аналитика'),
