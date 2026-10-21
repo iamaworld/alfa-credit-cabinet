@@ -124,7 +124,7 @@ export function scheduleBlock(terms, open = false) {
   return h('details', { class: 'why', open },
     h('summary', null, `График платежей · ${plural(rows.length, 'платёж', 'платежа', 'платежей')}`),
     h('p', { class: 'hint', style: { 'margin-top': '8px' } }, `Всего к возврату ${rub(total)}. Платежи равными суммами, даты ориентировочные.`),
-    h('div', { class: 'scroll-x', style: { 'max-height': '320px', 'overflow-y': 'auto' } }, h('table', { class: 'tbl' },
+    h('div', { class: 'scroll-x', style: { 'max-height': '320px', 'overflow-y': 'auto' } }, h('table', { class: 'tbl sched' },
       h('thead', null, h('tr', null, ['№', 'Дата', 'Платёж', 'Основной долг', 'Проценты', 'Остаток'].map((t) => h('th', null, t)))),
       h('tbody', null, rows.map((x) => h('tr', null,
         h('td', null, x.n), h('td', { style: { 'white-space': 'nowrap' } }, fmt(x.date)), h('td', { class: 'num' }, rub(x.payment)),

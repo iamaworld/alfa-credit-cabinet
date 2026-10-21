@@ -154,28 +154,29 @@ function counterPanel(app, setApp) {
   return h('div', { class: 'stack' },
     h('section', { class: 'card stack' }, resultIcon('warn'), h('h2', null, 'Есть другое предложение'), h('p', { class: 'muted' }, 'Запрошенные условия не проходят. Вот варианты, которые мы готовы одобрить, они проверены тем же расчётом.'),
       d.expiresAt ? h('p', { class: 'hint' }, `Предложение действует до ${date(d.expiresAt)}`) : null,
-      d.alternatives.map((a, idx) => {
-        const btn = h('button', { class: 'btn', type: 'button' }, 'Выбрать этот вариант');
+      h('div', { class: 'alt-grid' }, d.alternatives.map((a, idx) => {
+        const btn = h('button', { class: 'btn', type: 'button', 'aria-label': `Выбрать вариант: ${rub(a.amount)}` }, 'Выбрать');
         btn.addEventListener('click', async () => {
           btn.disabled = true;
           try { setApp((await post(`/applications/${app.id}/accept`, { altId: a.id }, { 'Idempotency-Key': `acc-${app.id}-${a.id}` })).application); }
           catch (e) { toast(e.message, true); btn.disabled = false; }
         });
-        return h('article', { class: 'card tight stack', style: { background: 'var(--bg)' } },
-          idx === 0 ? h('div', null, badge('Ближе всего к запросу', 'success')) : null,
-          h('div', { class: 'row between' }, h('h3', null, PN[a.product] || 'Вариант'), h('b', { class: 'num' }, rub(a.amount))),
+        // Варианты стоят рядом, чтобы их было удобно сравнивать
+        return h('article', { class: `alt${idx === 0 ? ' best' : ''}` },
+          idx === 0 ? badge('Ближе всего к запросу', 'success') : h('span', { class: 'badge' }, `Вариант ${idx + 1}`),
+          h('div', null, h('div', { class: 'small muted' }, PN[a.product] || 'Вариант'), h('div', { class: 'alt-amount num' }, rub(a.amount))),
           h('ul', { class: 'plain small muted' }, diffs(app.request, a).map((t) => h('li', null, t))),
-          h('div', { class: 'kv-row' },
+          h('div', { class: 'kv-2' },
             h('div', { class: 'kv' }, h('b', null, rub(a.payment)), h('span', null, 'платёж в месяц')),
             h('div', { class: 'kv' }, h('b', null, pct1(a.rate)), h('span', null, 'ставка')),
             h('div', { class: 'kv' }, h('b', null, months(a.term)), h('span', null, 'срок')),
             h('div', { class: 'kv' }, h('b', null, pct0(a.load)), h('span', null, 'нагрузка'))),
           btn);
-      }),
+      })),
       twoStepButton('Отказаться от предложения', 'Точно отказаться?', 'btn line', async () => setApp((await post(`/applications/${app.id}/cancel`)).application))),
-    h('section', { class: 'card stack' },
+    h('section', { class: 'card' }, h('div', { class: 'factor-cols' },
       reasonsBlock('Почему не получилось на запрошенных условиях', d.reasons, 'Показываем факторы без внутренних порогов.'),
-      reasonsBlock('Что сработало в вашу пользу', d.strengths)));
+      reasonsBlock('Что сработало в вашу пользу', d.strengths))));
 }
 
 function diffs(req, a) {
