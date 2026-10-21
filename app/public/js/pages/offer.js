@@ -83,6 +83,8 @@ export async function offerPage(root, inn, params) {
 
   // ----- результат -----
   const result = h('div', { class: 'stack', 'aria-live': 'polite' });
+  // Объяснения расчёта живут в широкой колонке под ползунками, а итог — в узкой залипающей справа
+  const explain = h('div', { class: 'stack offer-explain' });
   // На телефоне итог расчёта уезжает под ползунки: держим платёж на виду отдельной плашкой
   const miniPay = h('b', { class: 'num' });
   const miniChance = h('span', { class: 'small muted' });
@@ -118,6 +120,7 @@ export async function offerPage(root, inn, params) {
     } catch (e) {
       if (my !== seq) return;
       clear(result).append(h('div', { class: 'banner bad' }, h('div', null, e.message)));
+      clear(explain);
     }
   }
 
@@ -142,23 +145,29 @@ export async function offerPage(root, inn, params) {
         r.degraded ? h('div', { class: 'banner' }, h('div', null, 'Часть данных из сохранённой копии: источник недоступен.')) : null,
         cat.autoDecisionLimit && st.amount > cat.autoDecisionLimit ? h('div', { class: 'banner info' }, h('div', null, h('b', null, 'Решение примет специалист. '), `Заявки больше ${rub(cat.autoDecisionLimit)} проверяет сотрудник банка, поэтому ответ придёт чуть позже. До ${rub(cat.autoDecisionLimit)} решение автоматическое, за пару минут.`)) : null,
         cta,
-        h('p', { class: 'hint' }, r.disclaimer)),
+        h('p', { class: 'hint' }, r.disclaimer))]);
+    const helps = r.factors.filter((f) => f.direction === 'up');
+    const hurts = r.factors.filter((f) => f.direction !== 'up');
+    clear(explain).append(...[
       r.changes?.length ? h('section', { class: 'card stack' }, h('h3', null, 'Что изменилось и почему'),
         h('ul', { class: 'plain' }, r.changes.map((c) => h('li', { class: 'change' }, c.text)))) : null,
       r.improvements?.length ? h('section', { class: 'card stack' }, h('h3', null, 'Что повысит шансы'),
-        r.improvements.map((i) => h('div', { class: 'row between' },
-          h('div', null, h('b', null, i.label), h('div', { class: 'small muted' }, i.effect)),
-          h('button', { class: 'btn small ghost', type: 'button', onclick: () => { Object.assign(st, i.apply); clamp(); syncControls(); schedule(); } }, 'Применить')))) : null,
-      r.factors.length ? h('section', { class: 'card stack' }, h('h3', null, 'Из чего складывается оценка'),
-        h('p', { class: 'hint' }, 'Показываем, что помогает и что мешает. Точные пороги банк не раскрывает.'),
-        factorList(r.factors)) : null].filter(Boolean));
+        h('div', { class: 'tips' }, r.improvements.map((i) => h('div', { class: 'tip' },
+          h('b', null, i.label), h('span', { class: 'small muted' }, i.effect),
+          h('button', { class: 'btn small dark', type: 'button', onclick: () => { Object.assign(st, i.apply); clamp(); syncControls(); schedule(); } }, 'Применить'))))) : null,
+      r.factors.length ? h('section', { class: 'card stack' },
+        h('div', null, h('h3', null, 'Из чего складывается оценка'),
+          h('p', { class: 'hint' }, 'Показываем, что помогает и что мешает. Точные пороги банк не раскрывает.')),
+        h('div', { class: 'factor-cols' },
+          helps.length ? h('div', { class: 'stack' }, h('div', { class: 'label' }, `Помогает · ${helps.length}`), factorList(helps)) : null,
+          hurts.length ? h('div', { class: 'stack' }, h('div', { class: 'label' }, `Мешает · ${hurts.length}`), factorList(hurts)) : null)) : null].filter(Boolean));
   }
 
   clear(root).append(
     h('div', { class: 'crumbs' }, h('a', { href: draft ? `#/applications/${draftId}` : '#/' }, draft ? '← Вернуться к заявке' : '← Главная')),
     h('div', { class: 'page-head' }, h('h1', null, draft ? 'Изменить условия' : 'Подберите условия')),
-    h('div', { class: 'split' },
-      h('div', { class: 'stack' },
+    h('div', { class: 'offer-grid' },
+      h('div', { class: 'stack offer-controls' },
         h('section', { class: 'card stack' },
           h('h3', null, 'Для чего нужны деньги'), purposeChips, fitNote,
           h('div', { class: 'label' }, 'Продукт'), tabs),
@@ -168,7 +177,8 @@ export async function offerPage(root, inn, params) {
           h('div', { class: 'row between' }, h('label', { class: 'label', for: 'term' }, 'Срок'), termOut), termRange,
           rangeLabels, collateralRow),
         revenueBox),
-      h('div', { class: 'sticky' }, result)),
+      h('div', { class: 'offer-result' }, h('div', { class: 'sticky' }, result)),
+      explain),
     mini);
   syncControls();
   await refresh();

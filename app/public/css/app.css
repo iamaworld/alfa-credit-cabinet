@@ -307,11 +307,23 @@ details.why > * + * { margin-top: 12px; }
 .label + .big-num { margin-top: 6px; }
 .row + .meter { margin-top: 10px; }
 ul.plain:first-child, ol.plan:first-child, .timeline:first-child { margin-top: 0; }
+/* редактор условий: итог справа, объяснения под ползунками */
+.offer-grid { display: grid; gap: 24px; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); grid-template-areas: 'controls result' 'explain result'; align-items: start; }
+.offer-controls { grid-area: controls; }
+.offer-result { grid-area: result; align-self: stretch; }
+.offer-explain { grid-area: explain; }
+.tips { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.tip { display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 16px; background: var(--bg); }
+.tip .btn { margin-top: auto; align-self: flex-start; }
+.tip b { font-weight: 600; }
+.factor-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .tabbar { display: none; }
 .mini-pay { display: none; }
 
 @media (max-width: 900px) {
   .split, .split-even, .cols-2, .cols-3, .login { grid-template-columns: minmax(0, 1fr); }
+  .offer-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'controls' 'result' 'explain'; gap: 16px; }
+  .factor-cols { grid-template-columns: minmax(0, 1fr); }
   .sticky { position: static; }
   .login-l { padding: 32px var(--gutter) 40px; min-height: 0; }
   .login-l h1 { font-size: 40px; }
