@@ -148,12 +148,11 @@ textarea.input { min-height: 104px; resize: vertical; }
 .hero.promo .btn:hover { background: #F2F3F5; }
 .hero.promo .btn.ghost { background: rgba(255, 255, 255, .16); color: #fff; }
 .hero.promo .btn.ghost:hover { background: rgba(255, 255, 255, .26); }
-.hero .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 1.25px; text-transform: uppercase; }
+.hero .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; line-height: 24px; font-weight: 500; }
 .hero.promo .eyebrow { color: rgba(255, 255, 255, .9); }
 
 /* ---------- продукты ---------- */
-.product { display: flex; flex-direction: column; gap: 12px; transition: box-shadow .2s, transform .2s; }
-.product:not(.off):hover { box-shadow: var(--shadow-m); transform: translateY(-2px); }
+.product { display: flex; flex-direction: column; gap: 12px; }
 .product .p-ico { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--bg); color: var(--ink); }
 .product .p-ico svg { width: 26px; height: 26px; }
 .product .amount { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
@@ -269,9 +268,9 @@ table.tbl { width: 100%; border-collapse: collapse; }
 .login-r { padding: 48px; display: grid; align-content: center; gap: 16px; max-width: 600px; width: 100%; justify-self: center; }
 .login-r form h2 { margin-bottom: 4px; }
 .login-r form .btn { width: 100%; }
-.acc { display: grid; gap: 4px; text-align: left; width: 100%; padding: 16px 20px; border-radius: 16px; border: 0; background: var(--card); cursor: pointer; transition: box-shadow .15s, transform .15s; position: relative; }
+.acc { display: grid; gap: 4px; text-align: left; width: 100%; padding: 16px 20px; border-radius: 16px; border: 0; background: var(--card); cursor: pointer; transition: background .15s; position: relative; }
 .acc::after { content: ''; position: absolute; right: 20px; top: 50%; width: 8px; height: 8px; border-right: 2px solid var(--faint); border-top: 2px solid var(--faint); transform: translateY(-50%) rotate(45deg); }
-.acc:hover { box-shadow: var(--shadow-m); transform: translateY(-1px); }
+.acc:hover { background: #F7F7F8; }
 .acc b { font-weight: 600; padding-right: 24px; }
 .acc small { color: var(--muted); font-size: 13px; line-height: 18px; padding-right: 24px; }
 .toast-wrap { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); display: grid; gap: 8px; z-index: 50; width: min(92vw, 420px); }
@@ -300,7 +299,9 @@ ol.plan li::before { content: counter(plan); width: 28px; height: 28px; border-r
 .meta-i { display: inline-flex; align-items: center; gap: 6px; }
 .btn.logout svg { flex: none; }
 .feed-item { gap: 6px; }
-.feed-item + .feed-item { border-top: 1px solid var(--line); padding-top: 16px; }
+.feed-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.feed-grid .feed-item { margin: 0; padding: 20px; border-radius: 16px; background: var(--bg); }
+.checklist { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); column-gap: 24px; }
 .feed-item > * + * { margin-top: 6px; }
 h1 + p, h2 + p, .page-head h1 + p { margin-top: 8px; }
 details.why > * + * { margin-top: 12px; }
@@ -310,6 +311,10 @@ ul.plain:first-child, ol.plan:first-child, .timeline:first-child { margin-top: 0
 /* редактор условий: итог справа, объяснения под ползунками */
 .offer-grid { display: grid; gap: 24px; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); grid-template-areas: 'controls result' 'explain result'; align-items: start; }
 .offer-controls { grid-area: controls; }
+.app-grid { display: grid; gap: 24px; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); grid-template-areas: 'main side' 'timeline side'; align-items: start; }
+.app-main { grid-area: main; }
+.app-side { grid-area: side; align-self: stretch; }
+.app-timeline { grid-area: timeline; }
 .offer-result { grid-area: result; align-self: stretch; }
 .offer-explain { grid-area: explain; }
 .tips { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
@@ -324,6 +329,7 @@ ul.plain:first-child, ol.plan:first-child, .timeline:first-child { margin-top: 0
   .split, .split-even, .cols-2, .cols-3, .login { grid-template-columns: minmax(0, 1fr); }
   .offer-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'controls' 'result' 'explain'; gap: 16px; }
   .factor-cols { grid-template-columns: minmax(0, 1fr); }
+  .app-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'main' 'side' 'timeline'; gap: 16px; }
   .sticky { position: static; }
   .login-l { padding: 32px var(--gutter) 40px; min-height: 0; }
   .login-l h1 { font-size: 40px; }

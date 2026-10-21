@@ -159,8 +159,8 @@ export async function offerPage(root, inn, params) {
         h('div', null, h('h3', null, 'Из чего складывается оценка'),
           h('p', { class: 'hint' }, 'Показываем, что помогает и что мешает. Точные пороги банк не раскрывает.')),
         h('div', { class: 'factor-cols' },
-          helps.length ? h('div', { class: 'stack' }, h('div', { class: 'label' }, `Помогает · ${helps.length}`), factorList(helps)) : null,
-          hurts.length ? h('div', { class: 'stack' }, h('div', { class: 'label' }, `Мешает · ${hurts.length}`), factorList(hurts)) : null)) : null].filter(Boolean));
+          helps.length ? h('div', { class: 'stack' }, h('div', { class: 'label' }, 'Помогает'), factorList(helps)) : null,
+          hurts.length ? h('div', { class: 'stack' }, h('div', { class: 'label' }, 'Мешает'), factorList(hurts)) : null)) : null].filter(Boolean));
   }
 
   clear(root).append(

@@ -64,7 +64,7 @@ async function renderCompany(root, company, all) {
   let hero;
   if (best) {
     hero = h('section', { class: 'card hero promo' },
-      h('span', { class: 'eyebrow' }, 'Предодобренное предложение'),
+      h('span', { class: 'eyebrow' }, 'Вам предодобрено'),
       h('div', { class: 'big-num' }, h('span', { class: 'pre' }, 'до '), h('span', { class: 'nowrap' }, rub(best.amount))),
       h('p', null, `${pname[best.product]} на ${months(best.term)}, платёж около ${rub(best.payment)} в месяц`),
       h('div', { class: 'row' },
@@ -105,10 +105,10 @@ async function renderCompany(root, company, all) {
       productCards ? h('h2', null, 'Предложения по продуктам') : null,
       productCards,
       appStrip,
-      h('div', { class: 'split-even split' },
-        quest ? questCard(quest) : null,
-        h('section', { class: 'card stack' }, h('h2', null, 'Для вашего бизнеса'), h('p', { class: 'hint' }, 'Подборка зависит от вашей отрасли, региона и данных компании. Содержимое демонстрационное.'),
-          rest.map(feedItem))))].filter(Boolean));
+      // Оба блока на всю ширину: рядом они давали пустоту под коротким чек-листом
+      quest ? questCard(quest) : null,
+      rest.length ? h('section', { class: 'card stack' }, h('h2', null, 'Для вашего бизнеса'), h('p', { class: 'hint' }, 'Подборка зависит от вашей отрасли, региона и данных компании. Содержимое демонстрационное.'),
+        h('div', { class: 'feed-grid' }, rest.map(feedItem))) : null)].filter(Boolean));
 }
 
 function productCard(o, name, inn) {
@@ -133,7 +133,7 @@ function questCard(q) {
   return h('section', { class: 'card stack' },
     h('div', { class: 'row between' }, h('h2', null, q.title), h('b', { class: 'num' }, `${done} из ${total}`)),
     meter(done, total, done === total ? 'ok' : 'mid'),
-    h('ul', { class: 'plain' }, q.checklist.map((c) => h('li', { class: 'factor' },
+    h('ul', { class: 'plain checklist' }, q.checklist.map((c) => h('li', { class: 'factor' },
       h('span', { class: `arrow ${c.done ? 'up' : 'flat'}` }, icon(c.done ? 'check' : 'minus', 16)),
       h('div', null, h('b', null, c.label), !c.done && c.hint ? h('span', null, c.hint) : null)))));
 }

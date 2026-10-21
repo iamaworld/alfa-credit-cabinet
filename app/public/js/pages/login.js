@@ -34,7 +34,7 @@ export async function loginPage(root) {
     h('section', { class: 'login-l' },
       h('div', { class: 'brand' }, h('span', { class: 'brand-mark' }, alfaLogo(22)), h('span', null, 'Альфа-Банк', h('small', null, 'Кредитный кабинет для бизнеса'))),
       h('div', { class: 'stack' },
-        h('h1', null, 'Кредит для бизнеса: ', h('em', null, 'понятно'), ' до заявки и после неё'),
+        h('h1', null, 'Кредит для бизнеса, понятный до заявки и после неё'),
         h('p', { class: 'muted' }, 'Предодобренный лимит, условия, которые можно менять и сразу видеть почему, и статус заявки без звонков. Учебный прототип: данные синтетические.')),
       h('p', { class: 'hint' }, 'Прототип хакатона. Не является банковским сервисом.')),
     h('section', { class: 'login-r' }, form, accounts)));

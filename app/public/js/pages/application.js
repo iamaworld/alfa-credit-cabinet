@@ -65,9 +65,12 @@ export async function applicationPage(root, id) {
       h('div', { class: 'page-head' }, h('div', null, h('h1', null, 'Заявка ', h('span', { class: 'nowrap' }, app.number)), h('p', { class: 'muted' }, `${app.request.productName}, ${rub(app.request.amount)}, ${months(app.request.term)}`)),
         badge(app.statusTitle, TONE[app.tone])),
       stepper(app),
-      h('div', { class: 'split', style: { 'margin-top': '16px' } },
-        h('div', { class: 'stack' }, main),
-        h('aside', { class: 'stack' }, summaryCard(app), timelineCard(app))));
+      // Таймлайн длинный: он идёт под основной панелью, а справа — короткая карточка параметров, залипающая при прокрутке.
+      // На телефоне порядок: панель, параметры, таймлайн.
+      h('div', { class: 'app-grid', style: { 'margin-top': '16px' } },
+        h('div', { class: 'stack app-main' }, main),
+        h('aside', { class: 'app-side' }, h('div', { class: 'sticky' }, summaryCard(app))),
+        h('div', { class: 'app-timeline' }, timelineCard(app))));
     schedulePolling();
   }
 
