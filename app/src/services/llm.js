@@ -41,7 +41,7 @@ export function createLlm({ config, fetchImpl = fetch }) {
    * Запрос с ответом строго по JSON-схеме (грамматика на стороне сервера не даёт выйти за схему).
    * @returns {Promise<{ok: true, data: object, ms: number} | {ok: false, error: string, ms: number}>}
    */
-  async function chatJson({ system, user, schema, examples = [] }) {
+  async function chatJson({ system, user, schema, examples = [], maxTokens = 200, timeout = timeoutMs }) {
     const started = Date.now();
     if (!enabled) return { ok: false, error: 'disabled', ms: 0 };
     const messages = [{ role: 'system', content: system }];
@@ -49,10 +49,10 @@ export function createLlm({ config, fetchImpl = fetch }) {
     messages.push({ role: 'user', content: user });
     try {
       const out = await call('/v1/chat/completions', {
-        model, messages, temperature: 0, max_tokens: 200, // ответ — короткий JSON
+        model, messages, temperature: 0, max_tokens: maxTokens, // ответ — короткий JSON
         response_format: { type: 'json_schema', json_schema: { name: 'answer', strict: true, schema } },
         chat_template_kwargs: { enable_thinking: false }, // рассуждения Qwen3 отнимают секунды и не нужны для извлечения полей
-      }, timeoutMs);
+      }, timeout);
       const text = String(out.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
       cached = { at: Date.now(), value: { enabled: true, ready: true, model } };
       return { ok: true, data: JSON.parse(text), ms: Date.now() - started };

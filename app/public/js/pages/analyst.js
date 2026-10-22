@@ -1,4 +1,4 @@
-import { h, clear, rub, pct1, pct0, months, dateTime, age, badge, meter, skeleton, toast, stackable } from '../ui.js';
+import { h, clear, rub, pct1, pct0, months, dateTime, age, badge, meter, skeleton, toast, stackable, icon } from '../ui.js';
 import { get, post } from '../api.js';
 import { go } from '../nav.js';
 
@@ -53,6 +53,7 @@ export async function analystCasePage(root, id) {
 }
 
 function caseView(d, act) {
+  askClient = null;
   const a = d.application, dec = d.decision, ev = dec?.evaluation, ctx = d.context;
   const head = h('div', null,
     h('div', { class: 'crumbs' }, h('a', { href: '#/analyst' }, '← Очередь')),
@@ -110,7 +111,7 @@ function caseView(d, act) {
   // Справа залипает только панель решения; длинный журнал — слева под данными, иначе его низ не прокрутить
   return h('div', null, head,
     h('div', { class: 'app-grid' },
-      h('div', { class: 'stack app-main' }, request, engine, sources, infos),
+      h('div', { class: 'stack app-main' }, briefCard(a.id, d.canAct), request, engine, sources, infos),
       h('aside', { class: 'app-side' }, h('div', { class: 'sticky' }, d.canAct ? actionPanel(d, act)
         : h('section', { class: 'card stack' }, h('h3', null, 'Решение не требуется'), h('p', { class: 'muted' }, `Статус: ${a.statusTitle.toLowerCase()}. Действия аналитика доступны, когда заявка на ручной проверке.`)))),
       h('div', { class: 'app-timeline' }, audit)));
@@ -122,6 +123,8 @@ function factorRow(f) {
     h('div', null, h('b', null, f.title), h('div', { class: 'small muted' }, f.message)),
     h('div', null, h('b', { class: 'num' }, `${f.points > 0 ? '+' : ''}${f.points}`), h('div', { class: 'bar' }, h('i', { class: f.points >= 0 ? 'pos' : 'neg', style: { width: `${w}%` } }))));
 }
+
+let askClient = null;
 
 function actionPanel(d, act) {
   const dec = d.decision;
@@ -151,7 +154,33 @@ function actionPanel(d, act) {
   for (const [a, t] of opts) tabs.append(h('button', { class: 'chip', type: 'button', 'data-a': a, onclick: () => { action = a; paint(); } }, t));
   submit.addEventListener('click', async () => { submit.disabled = true; await act({ action, comment: comment.value, altId: altSel.value || undefined }); paint(); });
   paint();
+  // Справка вызывает это, когда аналитик берёт вопрос клиенту
+  askClient = (text) => { action = 'request_info'; comment.value = text; paint(); comment.focus(); comment.scrollIntoView({ block: 'center', behavior: 'smooth' }); };
   return h('section', { class: 'card stack' }, h('h3', null, 'Решение аналитика'),
     dec ? h('p', { class: 'small muted' }, `Рекомендация движка: ${(OUTCOME[dec.recommendation] || [dec.recommendation])[0]}`) : null,
     tabs, hint, altBox, h('div', { class: 'field' }, h('label', { for: 'comment' }, 'Комментарий'), comment), submit);
+}
+
+// Справка: вывод, на что смотреть, вопросы клиенту и все факты с источниками. Строится по правилам из данных заявки.
+function briefCard(id, canAct) {
+  const box = h('section', { class: 'card stack brief' }, h('h2', null, 'Справка по заявке'), skeleton(3));
+  get(`/analyst/applications/${id}/brief`).then((b) => {
+    const byId = Object.fromEntries(b.facts.map((x) => [x.id, x]));
+    const tone = (t) => h('span', { class: `arrow ${t === '+' ? 'up' : t === '-' ? 'down' : 'flat'}` }, icon(t === '+' ? 'arrowUp' : t === '-' ? 'arrowDown' : 'minus', 16));
+    const src = (x) => h('span', { class: 'badge' }, x.source);
+    clear(box).append(...[
+      h('h2', null, 'Справка по заявке'),
+      h('p', { class: 'brief-summary' }, b.opinion.summary),
+      b.opinion.attention.length ? h('div', { class: 'stack' }, h('h3', null, 'На что смотреть'),
+        h('ol', { class: 'plan' }, b.opinion.attention.map((x) => h('li', null, h('div', null,
+          h('b', null, byId[x.fact].text), h('div', { class: 'small muted' }, x.why), h('div', { style: { 'margin-top': '6px' } }, src(byId[x.fact]))))))) : null,
+      b.opinion.questions.length ? h('div', { class: 'stack' }, h('h3', null, 'Что спросить клиента'),
+        b.opinion.questions.map((q) => h('div', { class: 'brief-q' }, h('span', null, q),
+          canAct ? h('button', { class: 'btn small ghost', type: 'button', onclick: () => askClient?.(q) }, 'Задать вопрос') : null))) : null,
+      h('details', { class: 'why' }, h('summary', null, `Все факты · ${b.facts.length}`),
+        h('ul', { class: 'plain', style: { 'margin-top': '12px' } }, b.facts.map((x) => h('li', { class: 'factor' }, tone(x.tone), h('div', null, h('span', { style: { color: 'var(--ink)' } }, x.text), ' ', src(x)))))),
+      h('p', { class: 'hint' }, 'Справка собрана по правилам из данных заявки: ЕГРЮЛ, БКИ, выписка, расчёт движка и денежный календарь. Решение принимаете вы.'),
+    ].filter(Boolean));
+  }).catch((e) => clear(box).append(h('h2', null, 'Справка по заявке'), h('p', { class: 'muted' }, `Не удалось собрать справку: ${e.message}`)));
+  return box;
 }

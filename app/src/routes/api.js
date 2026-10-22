@@ -7,6 +7,7 @@ import { PRODUCTS, PURPOSES, ENGINE_VERSION } from '../engine/products.js';
 import { preview, preapprovedOffers, productFit, OFFER_VALID_DAYS } from '../engine/offer.js';
 import { buildFeed } from '../services/feed.js';
 import { forecastCashflow } from '../engine/cashflow.js';
+import { briefFor } from '../services/brief.js';
 import { DEFAULT_POLICY } from '../engine/decision.js';
 import { idempotent } from '../util/idempotency.js';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '../seed.js';
@@ -186,6 +187,8 @@ export function createApi({ db, config, apps, contexts, notifications, enrichmen
   const analyst = requireRole('analyst');
   r.get('/analyst/queue', analyst, (_req, res) => res.json(apps.analystQueue()));
   r.get('/analyst/applications/:id', analyst, (req, res) => res.json(apps.analystView(Number(req.params.id))));
+  // Справка: факты с источниками, вывод, на что смотреть и вопросы клиенту
+  r.get('/analyst/applications/:id/brief', analyst, (req, res) => res.json(briefFor(apps.analystView(Number(req.params.id)))));
   r.post('/analyst/applications/:id/decision', analyst, (req, res) => res.json(apps.analystAct(req.user, req.params.id, req.body)));
 
   r.use((_req, _res, next) => next(notFound('Метод не найден')));

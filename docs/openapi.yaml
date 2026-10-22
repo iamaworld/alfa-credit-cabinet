@@ -317,6 +317,27 @@ paths:
       parameters: [{ $ref: '#/components/parameters/Id' }]
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: object } } } }
+  /api/analyst/applications/{id}/brief:
+    get:
+      tags: [Analyst]
+      summary: Справка по заявке — факты с источниками, вывод, на что смотреть, вопросы клиенту
+      description: |
+        Факты собираются из данных заявки (ЕГРЮЛ, «Прозрачный бизнес», БКИ, выписка, расчёт движка, денежный календарь
+        со стресс-сценарием «выручка −20 %»). Вывод и вопросы строятся по правилам, без языковой модели.
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200':
+          description: Справка
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  facts: { type: array, items: { type: object, properties: { id: { type: string }, source: { type: string }, tone: { type: string, enum: ['+', '-', '0'] }, text: { type: string } } } }
+                  recommendation: { type: string }
+                  opinion: { type: object, properties: { summary: { type: string }, attention: { type: array, items: { type: object, properties: { fact: { type: string }, why: { type: string } } } }, questions: { type: array, items: { type: string } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /api/analyst/applications/{id}/decision:
     post:
       tags: [Analyst]

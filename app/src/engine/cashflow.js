@@ -18,13 +18,14 @@ const nextMonth = (ym, k) => { const d = new Date(Date.UTC(Number(ym.slice(0, 4)
  *   revolving — овердрафт: лимит берётся, только когда остаток уходит в минус, проценты (rate, % годовых)
  *               платятся за использованную сумму, долг гасится поступлениями
  * @param {number} [args.horizon] сколько месяцев прогнозировать
+ * @param {number} [args.inflowFactor] стресс-сценарий: поступления × коэффициент (0.8 — выручка на 20 % ниже)
  * @returns {null | { history, forecast, gaps, minBalance, suggestion, withLoan }}
  */
-export function forecastCashflow({ statement, loan = null, horizon = 12 }) {
+export function forecastCashflow({ statement, loan = null, horizon = 12, inflowFactor = 1 }) {
   const hist = (statement || []).filter((m) => Number.isFinite(m.balance));
   if (hist.length < 2) return null;
   const last6 = hist.slice(-6), last3 = hist.slice(-3);
-  const inflow = r1000(mean(last6.map((m) => m.inflow)));
+  const inflow = r1000(mean(last6.map((m) => m.inflow)) * inflowFactor);
   const part = (key) => r1000(mean(last3.map((m) => m.breakdown?.[key] ?? 0)));
   const structured = hist.every((m) => m.breakdown);
   // Без разбивки списаний — простая модель: средняя доля списаний от поступлений
