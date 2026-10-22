@@ -56,6 +56,8 @@ cd app && npm ci && npm run dev    # моки и приложение в одн�
 | Сохранение данных, динамический статус | SQLite, `app/src/db.js`; интерфейс сам обновляет статус |
 | Docker, единый запуск | `docker-compose.yml`, `app/Dockerfile`, `mocks/Dockerfile` |
 | Lock-файлы | `app/package-lock.json`, `mocks/package-lock.json` |
+| Лента, которая меняется под клиента | `app/src/services/feed.js` — строится из денежного календаря клиента, см. раздел ниже |
+| ИИ — только модели с открытыми весами, только где есть ценность | Qwen3-1.7B (Apache 2.0) на llama.cpp в Docker, разбор задачи клиента: `app/src/services/intent.js`; почему справка аналитику без модели — раздел «Справка аналитику» |
 | Синтетические данные и тестовые аккаунты | `mocks/src/data.js`, `app/src/seed.js` |
 | Моки вместо БКИ, ЕГРЮЛ/ЕГРИП, «Прозрачного бизнеса» | `mocks/` |
 | THIRD_PARTY_NOTICES | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |

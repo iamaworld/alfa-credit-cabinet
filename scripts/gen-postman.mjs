@@ -14,7 +14,11 @@ const folders = {
     R('Подключить компанию по ИНН', 'POST', '/api/companies', { inn: '7701234567' }),
     R('Профиль и статус источников', 'GET', '/api/companies/7701234567'),
     R('Предодобренные предложения', 'GET', '/api/companies/7701234567/offers'),
-    R('Лента', 'GET', '/api/companies/7701234567/feed'),
+    R('Лента (строится из денежного календаря клиента)', 'GET', '/api/companies/7701234567/feed'),
+    R('Денежный календарь: прогноз остатка на 12 месяцев', 'GET', '/api/companies/7701234567/cashflow'),
+    R('ИИ-помощник: готова ли модель', 'GET', '/api/assistant/status'),
+    R('ИИ-помощник: задача своими словами', 'POST', '/api/assistant/parse', { text: 'Клиенты платят через 60 дней, а зарплату 800 тысяч нужно платить сейчас' }),
+    R('Пересчёт: овердрафт под разрыв из календаря (в ответе — cashflow с кредитом)', 'POST', '/api/offers/preview', { inn: '7701234567', request: { product: 'overdraft', amount: 300000, term: 8, collateral: false } }),
     R('Пересчёт: срок 24 → 36 месяцев', 'POST', '/api/offers/preview', { inn: '7701234567', request: { product: 'working_capital', amount: 2500000, term: 36, collateral: false }, compareTo: { product: 'working_capital', amount: 2500000, term: 24, collateral: false } }),
   ],
   'Заявка клиента (сценарий «одобрение»)': [
@@ -32,6 +36,7 @@ const folders = {
   'Аналитик': [
     R('Очередь', 'GET', '/api/analyst/queue', null, { tokenVar: 'analystToken' }),
     R('Карточка заявки (укажите id в переменной applicationId)', 'GET', '/api/analyst/applications/{{applicationId}}', null, { tokenVar: 'analystToken' }),
+    R('Справка по заявке: факты, вывод, вопросы клиенту', 'GET', '/api/analyst/applications/{{applicationId}}/brief', null, { tokenVar: 'analystToken' }),
     R('Решение: одобрить (для заявки на ручной проверке)', 'POST', '/api/analyst/applications/{{applicationId}}/decision', { action: 'approve', comment: 'Обороты стабильны, нагрузка приемлемая.' }, { tokenVar: 'analystToken' }),
     R('Решение: запросить данные (для заявки на ручной проверке)', 'POST', '/api/analyst/applications/{{applicationId}}/decision', { action: 'request_info', comment: 'Подтвердите источник поступлений в марте.' }, { tokenVar: 'analystToken' }),
     R('Решение: повторить проверку (для заявки на ручной проверке)', 'POST', '/api/analyst/applications/{{applicationId}}/decision', { action: 'rerun' }, { tokenVar: 'analystToken' }),

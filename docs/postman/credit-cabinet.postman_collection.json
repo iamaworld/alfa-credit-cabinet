@@ -359,7 +359,7 @@
           ]
         },
         {
-          "name": "Лента",
+          "name": "Лента (строится из денежного календаря клиента)",
           "request": {
             "method": "GET",
             "header": [],
@@ -384,6 +384,191 @@
                   "type": "string"
                 }
               ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Статус ответа не 5xx', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Денежный календарь: прогноз остатка на 12 месяцев",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/companies/7701234567/cashflow",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "7701234567",
+                "cashflow"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Статус ответа не 5xx', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ИИ-помощник: готова ли модель",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/assistant/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assistant",
+                "status"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Статус ответа не 5xx', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ИИ-помощник: задача своими словами",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assistant/parse",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assistant",
+                "parse"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Клиенты платят через 60 дней, а зарплату 800 тысяч нужно платить сейчас\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Статус ответа не 5xx', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Пересчёт: овердрафт под разрыв из календаря (в ответе — cashflow с кредитом)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/offers/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "offers",
+                "preview"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inn\": \"7701234567\",\n  \"request\": {\n    \"product\": \"overdraft\",\n    \"amount\": 300000,\n    \"term\": 8,\n    \"collateral\": false\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "event": [
@@ -1020,6 +1205,47 @@
                 "analyst",
                 "applications",
                 "{{applicationId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{analystToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Статус ответа не 5xx', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Справка по заявке: факты, вывод, вопросы клиенту",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/analyst/applications/{{applicationId}}/brief",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "analyst",
+                "applications",
+                "{{applicationId}}",
+                "brief"
               ]
             },
             "auth": {
