@@ -159,6 +159,7 @@ const EXAMPLES = [
 function assistantCard(inn) {
   const text = h('textarea', { class: 'input', id: 'need', rows: 2, maxlength: 600, placeholder: 'Например: клиенты платят через 60 дней, а зарплату нужно платить сейчас' });
   const err = h('p', { class: 'err', role: 'alert' });
+  const notTask = h('div', { class: 'banner info', hidden: true, role: 'status' });
   const btn = h('button', { class: 'btn', type: 'submit' }, 'Подобрать условия');
   const status = h('p', { class: 'hint assistant-status' });
   get('/assistant/status').then((s) => {
@@ -167,11 +168,16 @@ function assistantCard(inn) {
   }).catch(() => {});
   const submit = async (e) => {
     e?.preventDefault();
-    err.textContent = '';
+    err.textContent = ''; notTask.hidden = true;
     if (text.value.trim().length < 5) { err.textContent = 'Опишите задачу хотя бы парой слов.'; text.focus(); return; }
     btn.disabled = true; btn.textContent = 'Разбираем задачу…';
     try {
       const r = await post('/assistant/parse', { text: text.value });
+      if (!r.understood) {
+        clear(notTask).append(h('div', null, r.message));
+        notTask.hidden = false; btn.disabled = false; btn.textContent = 'Подобрать условия'; text.focus();
+        return;
+      }
       try { sessionStorage.setItem('assistant', JSON.stringify({ text: text.value.trim(), ...r })); } catch { /* не критично */ }
       const q = new URLSearchParams({ product: r.request.product, amount: r.request.amount, term: r.request.term, purpose: r.purpose, from: 'assistant' });
       go(`#/offer/${inn}?${q}`);
@@ -180,7 +186,7 @@ function assistantCard(inn) {
   text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(e); });
   return h('form', { class: 'card stack assistant', onsubmit: submit },
     h('div', null, h('h2', null, 'На что нужны деньги?'), h('p', { class: 'muted' }, 'Опишите задачу своими словами — подберём продукт, сумму и срок. Продукты банка знать не нужно.')),
-    h('div', { class: 'assistant-row' }, text, btn), err,
+    h('div', { class: 'assistant-row' }, text, btn), err, notTask,
     h('div', { class: 'chips wrap' }, EXAMPLES.map((x) => h('button', { class: 'chip', type: 'button', onclick: () => { text.value = x; text.focus(); } }, x))),
     status);
 }

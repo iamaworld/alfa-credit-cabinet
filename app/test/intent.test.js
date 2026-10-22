@@ -80,6 +80,22 @@ test('модель написала сумму в тысячах — сверя�
   assert.equal((await svc.parse('аренду 350 тыс. платить нечем')).request.amount, 350_000);
 });
 
+test('не про финансирование — не разбираем, а просим описать задачу', async () => {
+  for (const text of ['как дела', 'привет, как ты?', 'какая сегодня погода']) {
+    const r = await createIntentService({ llm: llmOff }).parse(text);
+    assert.equal(r.understood, false, text);
+    assert.match(r.message, /на что бизнесу нужны деньги/);
+  }
+  const byModel = await createIntentService({ llm: llmSays({ about_financing: false }) }).parse('как оплатить парковку у офиса');
+  assert.equal(byModel.understood, false, 'модель решила, что это не задача — верим');
+});
+
+test('задача без суммы, но с деньгами в тексте — разбирается', async () => {
+  const r = await createIntentService({ llm: llmOff }).parse('нужны деньги на закупку к сезону');
+  assert.equal(r.understood, true);
+  assert.equal(r.purpose, 'working');
+});
+
 test('пустой текст отклоняется', async () => {
   await assert.rejects(() => createIntentService({ llm: llmOff }).parse('  '), /Опишите задачу/);
 });

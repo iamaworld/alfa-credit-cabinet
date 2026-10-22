@@ -57,12 +57,14 @@ const PURPOSE_RULES = [
   ['development', /открыть|открываем|откроем|новое направлени|филиал|точку|магазин|кафе|кофейн|салон|расшир|запуск/],
   ['working', /закуп|товар|сырь|материал|оборот|поставщик|сезон/],
 ];
+const TOPIC = /деньг|денег|кредит|финансир|займ|заём|заем|овердрафт|лимит|ссуд|рассрочк|предоплат|оплат|платеж|платёж|платит|выручк|оборот|налог|зарплат|закуп|купить|покупк|бизнес/;
 const PRODUCT_WORDS = [['overdraft', /овердрафт/], ['equipment', /на оборудование|лизинг/], ['working_capital', /оборотн/]];
 
 /** Разбор только по правилам: работает всегда, без модели. */
 export function parseByRules(text) {
   const t = text.toLowerCase();
-  const purpose = (PURPOSE_RULES.find(([, re]) => re.test(t)) || ['working'])[0];
+  const matchedPurpose = PURPOSE_RULES.find(([, re]) => re.test(t));
+  const purpose = (matchedPurpose || ['working'])[0];
   const amounts = findAmounts(text);
   // Сумма после слов «нужно», «взять», «кредит» важнее остальных чисел (обороты, выручка)
   const cue = /(нужн|надо|взять|кредит|займ|сумм|не хватает|нечем|на старт)/g;
@@ -70,7 +72,10 @@ export function parseByRules(text) {
   for (const c of t.matchAll(cue)) { const after = amounts.find((a) => a.at > c.index); if (after) { amount = after.value; amountCued = true; break; } }
   if (amount == null && amounts.length) { amount = amounts[0].value; amountCued = amounts.length === 1 && t.search(cue) >= 0; } // «аренду 350 тыс. платить нечем»
   const terms = findTerms(text);
-  return { purpose, amount, amountCued, term: terms[0] ?? null, collateral: /залог/.test(t) && !/без залог/.test(t), explicitProduct: (PRODUCT_WORDS.find(([, re]) => re.test(t)) || [null])[0] };
+  const explicitProduct = (PRODUCT_WORDS.find(([, re]) => re.test(t)) || [null])[0];
+  // Есть ли в тексте хоть какой-то признак задачи на финансирование: цель, продукт, сумма или денежные слова
+  const strong = !!matchedPurpose || !!explicitProduct || amounts.length > 0;
+  return { purpose, amount, amountCued, term: terms[0] ?? null, collateral: /залог/.test(t) && !/без залог/.test(t), explicitProduct, signal: strong ? 'strong' : TOPIC.test(t) ? 'weak' : 'none' };
 }
 
 const SCHEMA = {
@@ -95,6 +100,15 @@ const EXAMPLES = [
   { user: 'нужно 400 тысяч на пару месяцев, пока покупатель не оплатит поставку', answer: { purpose: 'cash_gap', amount_rub: 400000, term_months: 0, collateral: false } },
 ];
 
+// Пограничный случай («как оплатить парковку у офиса»): есть только общее денежное слово — спрашиваем модель отдельно
+const RELEVANCE_SCHEMA = { type: 'object', properties: { about_financing: { type: 'boolean' } }, required: ['about_financing'] };
+const RELEVANCE_SYSTEM = 'Определи, описывает ли сообщение, на что бизнесу нужны деньги (кредит, кассовый разрыв, покупка, закупка, расширение). Приветствие, бытовой вопрос, вопрос не по теме — false.';
+const RELEVANCE_EXAMPLES = [
+  { user: 'поставщик требует оплату вперёд, а денег на счёте мало', answer: { about_financing: true } },
+  { user: 'как оплатить штраф за парковку', answer: { about_financing: false } },
+];
+const NOT_TASK = 'Не похоже на задачу для кредита. Напишите, на что бизнесу нужны деньги: например, «клиенты платят через 60 дней, а зарплату нужно платить сейчас».';
+
 const near = (a, b) => Math.abs(a - b) <= Math.max(1000, b * 0.01);
 
 export function createIntentService({ llm }) {
@@ -108,6 +122,13 @@ export function createIntentService({ llm }) {
     const notes = [];
     let purpose = rules.purpose, amount = rules.amount, term = rules.term, collateral = rules.collateral, source = 'rules';
 
+    // Не про финансирование («как дела», «привет») — никуда не ведём, а просим описать задачу.
+    // Нет ни цели, ни суммы, ни денежных слов — отвечаем сразу, без модели.
+    if (rules.signal === 'none') return { understood: false, message: NOT_TASK, source: 'rules', llm: { used: false, ms: 0 } };
+    if (rules.signal === 'weak') {
+      const rel = await llm.chatJson({ system: RELEVANCE_SYSTEM, user: clean, schema: RELEVANCE_SCHEMA, examples: RELEVANCE_EXAMPLES, maxTokens: 20 });
+      if (rel.ok && rel.data.about_financing === false) return { understood: false, message: NOT_TASK, source: 'llm', llm: { used: true, ms: rel.ms } };
+    }
     const r = await llm.chatJson({ system: SYSTEM, user: clean, schema: SCHEMA, examples: EXAMPLES });
     if (r.ok && PURPOSES[r.data.purpose]) {
       source = 'llm';
@@ -140,7 +161,7 @@ export function createIntentService({ llm }) {
     const fmtAmount = (v) => (v >= 1_000_000 ? `${String(+(v / 1_000_000).toFixed(2)).replace('.', ',')} млн ₽` : `${Math.round(v / 1000)} тыс. ₽`);
     const summary = [PURPOSES[purpose].label, amount != null ? fmtAmount(amount) : null, term != null ? `на ${term} мес.` : null].filter(Boolean).join(' · ');
     return {
-      purpose, summary,
+      understood: true, purpose, summary,
       request: { product, amount: amount ?? Math.min(p.max, Math.max(p.min, 1_000_000)), term: term ?? p.defaultTerm, collateral: collateral && !p.securedByPurchase },
       source, notes,
       llm: { used: source === 'llm', ms: r.ms, error: r.ok ? undefined : r.error },
