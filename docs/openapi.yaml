@@ -174,7 +174,8 @@ paths:
               schema:
                 type: object
                 properties:
-                  understood: { type: boolean, description: 'false — текст не про финансирование (приветствие, вопрос не по теме); тогда есть только message' }
+                  understood: { type: boolean, description: 'false — не заявка: тогда есть только reason и message' }
+                  reason: { type: string, enum: [not_task, prohibited, personal, tiny], description: 'не про финансирование / цель, которую банк не финансирует / личные расходы / сумма меньше 10 000 ₽' }
                   message: { type: string }
                   purpose: { type: string, enum: [cash_gap, working, equipment, development] }
                   summary: { type: string }

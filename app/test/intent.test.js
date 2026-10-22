@@ -96,6 +96,18 @@ test('задача без суммы, но с деньгами в тексте �
   assert.equal(r.purpose, 'working');
 });
 
+test('запрещённые цели, личные расходы и копеечные суммы — не заявка', async () => {
+  const svc = createIntentService({ llm: llmSays({ purpose: 'cash_gap', amount_rub: 1_000_000, term_months: 12, collateral: false }) });
+  const r1 = await svc.parse('Хочу снять шлюх в офис на миллион. Верну через год');
+  assert.equal(r1.understood, false); assert.equal(r1.reason, 'prohibited');
+  const r2 = await svc.parse('Мне надо 125 рублей 98 копеек на еду. Верну через 5 лет честно');
+  assert.equal(r2.understood, false); assert.equal(r2.reason, 'personal');
+  const r3 = await svc.parse('нужно 5000 рублей на закупку');
+  assert.equal(r3.understood, false); assert.equal(r3.reason, 'tiny');
+  const ok = await svc.parse('нужно 1 млн на закупку к сезону, вернём за год');
+  assert.equal(ok.understood, true, 'обычная задача проходит');
+});
+
 test('пустой текст отклоняется', async () => {
   await assert.rejects(() => createIntentService({ llm: llmOff }).parse('  '), /Опишите задачу/);
 });

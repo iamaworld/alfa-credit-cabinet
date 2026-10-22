@@ -107,6 +107,16 @@ const RELEVANCE_EXAMPLES = [
   { user: 'поставщик требует оплату вперёд, а денег на счёте мало', answer: { about_financing: true } },
   { user: 'как оплатить штраф за парковку', answer: { about_financing: false } },
 ];
+// Цели, которые банк не финансирует, и личные расходы — проверяются правилами до модели:
+// маленькой модели в таких вопросах доверять нельзя
+const PROHIBITED = /шлюх|проститу|интим|эскорт|бордел|наркот|закладк|оружи|взятк|обнал|отмыв|казино|букмекер|ставк[иау] на спорт|игровые автомат/;
+const PERSONAL = /на еду|поесть|продукты домой|на продукты себе|в отпуск|на отпуск|на свадьб|на ремонт квартир|ремонт в квартир|на шопинг|на айфон|на телефон себе|на лечение|на учёбу|на учебу|погасить ипотек|на кредитку|долг другу/;
+const MIN_AMOUNT = 10_000;
+const REFUSE = {
+  prohibited: 'Такие цели банк не финансирует. Опишите задачу бизнеса: закупку, оборудование, кассовый разрыв или развитие.',
+  personal: 'Похоже, деньги нужны на личные расходы. Здесь — кредиты для бизнеса; на личные цели подойдёт потребительский кредит.',
+  tiny: 'Сумма слишком мала для кредита бизнесу: продукты начинаются от 100 000 ₽.',
+};
 const NOT_TASK = 'Не похоже на задачу для кредита. Напишите, на что бизнесу нужны деньги: например, «клиенты платят через 60 дней, а зарплату нужно платить сейчас».';
 
 const near = (a, b) => Math.abs(a - b) <= Math.max(1000, b * 0.01);
@@ -122,12 +132,17 @@ export function createIntentService({ llm }) {
     const notes = [];
     let purpose = rules.purpose, amount = rules.amount, term = rules.term, collateral = rules.collateral, source = 'rules';
 
+    // Запрещённые цели, личные расходы и копеечные суммы — не заявка; объясняем почему
+    const low = clean.toLowerCase();
+    const mentioned0 = findAmounts(clean).map((a) => a.value);
+    const refuse = PROHIBITED.test(low) ? 'prohibited' : PERSONAL.test(low) ? 'personal' : mentioned0.length && Math.max(...mentioned0) < MIN_AMOUNT ? 'tiny' : null;
+    if (refuse) return { understood: false, reason: refuse, message: REFUSE[refuse], source: 'rules', llm: { used: false, ms: 0 } };
     // Не про финансирование («как дела», «привет») — никуда не ведём, а просим описать задачу.
     // Нет ни цели, ни суммы, ни денежных слов — отвечаем сразу, без модели.
-    if (rules.signal === 'none') return { understood: false, message: NOT_TASK, source: 'rules', llm: { used: false, ms: 0 } };
+    if (rules.signal === 'none') return { understood: false, reason: 'not_task', message: NOT_TASK, source: 'rules', llm: { used: false, ms: 0 } };
     if (rules.signal === 'weak') {
       const rel = await llm.chatJson({ system: RELEVANCE_SYSTEM, user: clean, schema: RELEVANCE_SCHEMA, examples: RELEVANCE_EXAMPLES, maxTokens: 20 });
-      if (rel.ok && rel.data.about_financing === false) return { understood: false, message: NOT_TASK, source: 'llm', llm: { used: true, ms: rel.ms } };
+      if (rel.ok && rel.data.about_financing === false) return { understood: false, reason: 'not_task', message: NOT_TASK, source: 'llm', llm: { used: true, ms: rel.ms } };
     }
     const r = await llm.chatJson({ system: SYSTEM, user: clean, schema: SCHEMA, examples: EXAMPLES });
     if (r.ok && PURPOSES[r.data.purpose]) {
