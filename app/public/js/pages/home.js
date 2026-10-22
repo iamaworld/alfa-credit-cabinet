@@ -100,7 +100,7 @@ async function renderCompany(root, company, all) {
   const attentionBox = attention.length ? h('div', { class: 'banner info' }, h('div', { style: { display: 'grid', gap: '6px' } }, h('b', null, 'Нужно ваше действие'),
     attention.map((a) => h('a', { class: 'link', href: `#/applications/${a.id}` }, `${a.number}: ${a.statusTitle.toLowerCase()}`)))) : null;
 
-  root.append(...[head, attentionBox, degraded, hero,
+  root.append(...[head, attentionBox, degraded, company.status === 'ACTIVE' ? assistantCard(inn) : null, hero,
     h('div', { class: 'stack' },
       productCards ? h('h2', null, 'Предложения по продуктам') : null,
       productCards,
@@ -144,4 +144,40 @@ function feedItem(i) {
     h('p', { class: 'muted small' }, i.text),
     i.note ? h('p', { class: 'hint' }, i.note) : null,
     i.link ? h('a', { class: 'link', href: i.link }, 'Открыть') : null);
+}
+
+// «Опишите задачу своими словами»: локальная модель превращает фразу в цель, сумму и срок,
+// а условия считает тот же движок. Если модель недоступна, сервер разбирает текст по правилам.
+const EXAMPLES = [
+  'Клиенты платят через 60 дней, а зарплату 800 тысяч нужно платить сейчас',
+  'Хотим купить второй грузовик к сезону, примерно 4 млн, лет на 5',
+  'Перед новым годом закупаем товар, не хватает 1,5 млн, вернём за год',
+];
+function assistantCard(inn) {
+  const text = h('textarea', { class: 'input', id: 'need', rows: 2, maxlength: 600, placeholder: 'Например: клиенты платят через 60 дней, а зарплату нужно платить сейчас' });
+  const err = h('p', { class: 'err', role: 'alert' });
+  const btn = h('button', { class: 'btn', type: 'submit' }, 'Подобрать условия');
+  const status = h('p', { class: 'hint assistant-status' });
+  get('/assistant/status').then((s) => {
+    status.textContent = s.ready ? 'Разбирает локальная модель с открытыми весами: текст не уходит за пределы банка.'
+      : s.enabled ? 'Модель загружается — пока разберём по ключевым словам.' : 'Разберём по ключевым словам.';
+  }).catch(() => {});
+  const submit = async (e) => {
+    e?.preventDefault();
+    err.textContent = '';
+    if (text.value.trim().length < 5) { err.textContent = 'Опишите задачу хотя бы парой слов.'; text.focus(); return; }
+    btn.disabled = true; btn.textContent = 'Разбираем задачу…';
+    try {
+      const r = await post('/assistant/parse', { text: text.value });
+      try { sessionStorage.setItem('assistant', JSON.stringify({ text: text.value.trim(), ...r })); } catch { /* не критично */ }
+      const q = new URLSearchParams({ product: r.request.product, amount: r.request.amount, term: r.request.term, purpose: r.purpose, from: 'assistant' });
+      go(`#/offer/${inn}?${q}`);
+    } catch (x) { err.textContent = x.message; btn.disabled = false; btn.textContent = 'Подобрать условия'; }
+  };
+  text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(e); });
+  return h('form', { class: 'card stack assistant', onsubmit: submit },
+    h('div', null, h('h2', null, 'На что нужны деньги?'), h('p', { class: 'muted' }, 'Опишите задачу своими словами — подберём продукт, сумму и срок. Продукты банка знать не нужно.')),
+    h('div', { class: 'assistant-row' }, text, btn), err,
+    h('div', { class: 'chips wrap' }, EXAMPLES.map((x) => h('button', { class: 'chip', type: 'button', onclick: () => { text.value = x; text.focus(); } }, x))),
+    status);
 }

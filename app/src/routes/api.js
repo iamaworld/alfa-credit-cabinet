@@ -12,7 +12,7 @@ import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '../seed.js';
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-export function createApi({ db, config, apps, contexts, notifications, enrichment }) {
+export function createApi({ db, config, apps, contexts, notifications, enrichment, llm, intent }) {
   const r = express.Router();
   const limiter = loginLimiter();
   const userByLogin = db.prepare('SELECT * FROM users WHERE login = ?');
@@ -114,6 +114,18 @@ export function createApi({ db, config, apps, contexts, notifications, enrichmen
     const { ctx, data } = await contexts.get(inn);
     const list = apps.listFor(req.user).filter((a) => a.inn === inn).map((a) => ({ ...a }));
     res.json(buildFeed({ ctx, fns: data.fns, applications: list }));
+  }));
+
+  // ----- ИИ-помощник: задача своими словами → параметры заявки -----
+  r.get('/assistant/status', requireRole('client'), wrap(async (_req, res) => {
+    const s = await llm.status();
+    if (s.ready) intent.warmup(); // клиент открыл главную — пока он печатает, модель прогревается
+    res.json(s);
+  }));
+  r.post('/assistant/parse', requireRole('client'), wrap(async (req, res) => {
+    const text = String(req.body?.text || '');
+    if (text.length > 600) throw badRequest('Опишите задачу короче — до 600 символов', { field: 'text' });
+    res.json(await intent.parse(text));
   }));
 
   // ----- редактор оффера -----

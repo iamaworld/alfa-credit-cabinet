@@ -336,6 +336,17 @@ ul.plain:first-child, ol.plan:first-child, .timeline:first-child { margin-top: 0
 .kv-2 .kv b { font-size: 16px; }
 .kv-2 .kv span { font-size: 13px; line-height: 16px; }
 .tbl.sched th, .tbl.sched td { padding: 10px 8px; font-size: 14px; white-space: nowrap; }
+/* ИИ-помощник */
+.assistant-row { display: flex; gap: 12px; align-items: stretch; }
+.assistant-row textarea.input { min-height: 56px; flex: 1; resize: none; }
+.assistant-row .btn { flex: none; }
+.assistant .chip { font-size: 14px; font-weight: 400; text-align: left; white-space: normal; }
+.understood { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; }
+.understood p { margin-top: 4px; }
+.understood-q p { color: var(--muted); font-style: italic; }
+.understood-a { border-left: 2px solid var(--red); padding-left: 20px; }
+.understood-a ul { margin-top: 8px; }
+.understood-a .hint { margin-top: 8px; }
 .tabbar { display: none; }
 .mini-pay { display: none; }
 
@@ -344,6 +355,9 @@ ul.plain:first-child, ol.plan:first-child, .timeline:first-child { margin-top: 0
   .offer-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'controls' 'result' 'explain'; gap: 16px; }
   .factor-cols { grid-template-columns: minmax(0, 1fr); }
   .app-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'main' 'side' 'timeline'; gap: 16px; }
+  .assistant-row { flex-direction: column; }
+  .understood { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .understood-a { border-left: 0; padding-left: 0; border-top: 2px solid var(--red); padding-top: 16px; }
   .sticky { position: static; }
   /* на телефоне панель входа компактная: форма и тестовые аккаунты видны на первом экране */
   .login-l { padding: 20px var(--gutter) 24px; min-height: 0; gap: 16px; }

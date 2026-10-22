@@ -17,5 +17,12 @@ export function loadConfig(env = process.env) {
     // Пауза между этапами обработки заявки: нужна, чтобы статус был виден «в движении»
     stageDelayMs: int(env.STAGE_DELAY_MS, 1800),
     seed: env.SEED !== '0',
+    // Локальная модель с открытыми весами через Ollama. Без неё ИИ-помощник разбирает текст по правилам.
+    llm: {
+      enabled: env.LLM_ENABLED !== '0' && !!env.LLM_URL,
+      url: env.LLM_URL || 'http://127.0.0.1:8080',
+      model: env.LLM_MODEL || 'qwen3-1.7b',
+      timeoutMs: int(env.LLM_TIMEOUT_MS, 15000),
+    },
   };
 }

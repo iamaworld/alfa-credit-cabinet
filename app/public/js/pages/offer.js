@@ -18,7 +18,7 @@ export async function offerPage(root, inn, params) {
     product: start.product, collateral: !!start.collateral,
     amount: start.amount || Math.min(byId[start.product].max, Math.max(byId[start.product].min, 1_000_000)),
     term: start.term || byId[start.product].defaultTerm,
-    purpose: draft?.purpose || null,
+    purpose: draft?.purpose || (cat.purposes[params.get('purpose')] ? params.get('purpose') : null),
     declaredRevenue: draft?.declaredRevenue || null,
   };
   clamp();
@@ -166,6 +166,7 @@ export async function offerPage(root, inn, params) {
   clear(root).append(
     h('div', { class: 'crumbs' }, h('a', { href: draft ? `#/applications/${draftId}` : '#/' }, draft ? '← Вернуться к заявке' : '← Главная')),
     h('div', { class: 'page-head' }, h('h1', null, draft ? 'Изменить условия' : 'Подберите условия')),
+    params.get('from') === 'assistant' ? understoodCard() : null,
     h('div', { class: 'offer-grid' },
       h('div', { class: 'stack offer-controls' },
         h('section', { class: 'card stack' },
@@ -188,4 +189,19 @@ export async function offerPage(root, inn, params) {
   window.addEventListener('resize', toggleMini);
   toggleMini();
   return () => { schedule.cancel(); seq++; window.removeEventListener('scroll', toggleMini); window.removeEventListener('resize', toggleMini); };
+}
+
+// Что понял помощник: исходная фраза, разобранные параметры, откуда они взяты и что поправлено
+function understoodCard() {
+  let a = null;
+  try { a = JSON.parse(sessionStorage.getItem('assistant') || 'null'); } catch { /* нет данных */ }
+  if (!a) return null;
+  const by = a.source === 'llm' ? `локальная модель, ${String(Math.round(a.llm.ms / 100) / 10).replace('.', ',')} с` : 'по ключевым словам';
+  return h('section', { class: 'card understood' },
+    h('div', { class: 'understood-q' }, h('span', { class: 'label' }, 'Вы написали'), h('p', null, `«${a.text}»`)),
+    h('div', { class: 'understood-a' },
+      h('span', { class: 'label' }, `Поняли так · ${by}`),
+      h('p', null, h('b', null, a.summary)),
+      a.notes?.length ? h('ul', { class: 'plain small muted' }, a.notes.map((n) => h('li', null, n))) : null,
+      h('p', { class: 'hint' }, 'Это черновик условий: проверьте и поправьте ниже. Решение принимает банк по расчёту, а не помощник.')));
 }

@@ -12,6 +12,8 @@ import { createEnrichment } from './services/enrichment.js';
 import { createNotifications } from './services/notifications.js';
 import { createApplications } from './services/applications.js';
 import { createContextService } from './services/context.js';
+import { createLlm } from './services/llm.js';
+import { createIntentService } from './services/intent.js';
 import { createApi } from './routes/api.js';
 import { seedDemo } from './seed.js';
 
@@ -26,6 +28,8 @@ export function createApp(overrides = {}) {
   const notifications = createNotifications(db);
   const contexts = createContextService({ enrichment, ttlMs: overrides.contextTtlMs });
   const apps = createApplications({ db, config, enrichment, notifications });
+  const llm = overrides.llm || createLlm({ config, fetchImpl: overrides.llmFetch });
+  const intent = createIntentService({ llm });
 
   const app = express();
   app.disable('x-powered-by');
@@ -47,7 +51,7 @@ export function createApp(overrides = {}) {
   app.use('/api', sameOriginGuard);
 
   app.get('/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
-  app.use('/api', createApi({ db, config, apps, contexts, notifications, enrichment }));
+  app.use('/api', createApi({ db, config, apps, contexts, notifications, enrichment, llm, intent }));
 
   // Документация API
   const docsDir = process.env.DOCS_DIR || path.resolve(here, '../../docs');
@@ -66,5 +70,5 @@ export function createApp(overrides = {}) {
   app.use(express.static(path.resolve(here, '../public'), { maxAge: 0, extensions: ['html'] }));
   app.use(errorHandler);
 
-  return { app, db, apps, contexts, notifications, enrichment, config };
+  return { app, db, apps, contexts, notifications, enrichment, config, llm, intent };
 }

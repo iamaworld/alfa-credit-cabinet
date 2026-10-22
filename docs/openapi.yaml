@@ -20,6 +20,7 @@ tags:
   - { name: Auth, description: Вход и сессия }
   - { name: Company, description: Подключение компании по ИНН, предодобренные предложения, лента }
   - { name: Offer, description: Редактор условий и пересчёт }
+  - { name: Assistant, description: ИИ-помощник на локальной модели с открытыми весами; при недоступности модели — разбор по правилам }
   - { name: Application, description: Заявка клиента }
   - { name: Analyst, description: Кабинет аналитика }
   - { name: System, description: Служебные методы }
@@ -118,6 +119,43 @@ paths:
       parameters: [{ $ref: '#/components/parameters/Inn' }]
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: object } } } }
+  /api/assistant/status:
+    get:
+      tags: [Assistant]
+      summary: Доступна ли локальная модель
+      responses:
+        '200':
+          description: Состояние модели
+          content: { application/json: { schema: { type: object, properties: { enabled: { type: boolean }, ready: { type: boolean }, model: { type: string, example: 'qwen3-1.7b' }, reason: { type: string, nullable: true, enum: [loading, timeout, unavailable] } } } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/assistant/parse:
+    post:
+      tags: [Assistant]
+      summary: Задача своими словами → параметры заявки
+      description: |
+        Модель определяет цель и выбирает нужную сумму и срок среди упомянутых в тексте. Сумма и срок принимаются,
+        только если такие числа есть в тексте; затем они приводятся к лимитам продукта. Если модель недоступна или
+        ответила не по схеме, работает разбор по правилам (source = rules). Решение по кредиту модель не принимает.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [text], properties: { text: { type: string, maxLength: 600, example: 'Оборот 3 млн в месяц, нужно 1,5 млн на закупку товара к сезону на год' } } } } }
+      responses:
+        '200':
+          description: Разобранные параметры
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  purpose: { type: string, enum: [cash_gap, working, equipment, development] }
+                  summary: { type: string }
+                  request: { type: object, properties: { product: { type: string }, amount: { type: integer }, term: { type: integer }, collateral: { type: boolean } } }
+                  source: { type: string, enum: [llm, rules] }
+                  notes: { type: array, items: { type: string } }
+                  llm: { type: object, properties: { used: { type: boolean }, ms: { type: integer }, error: { type: string } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
   /api/offers/preview:
     post:
       tags: [Offer]

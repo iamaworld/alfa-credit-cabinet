@@ -19,6 +19,41 @@ services:
     command: ["statement"]
     environment: { PORT: "4003" }
 
+  # Локальная языковая модель с открытыми весами: Qwen3-1.7B (Apache 2.0) на сервере llama.cpp (MIT), только CPU.
+  # Нужна только ИИ-помощнику: без неё кабинет работает, а текст разбирается по правилам.
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server@sha256:8c74db29f1a2bef3f0a331b52c4d6214601dfceed4bee0b94cc48b3b23ff257d
+    restart: unless-stopped
+    command: ["-m", "/models/Qwen3-1.7B-Q8_0.gguf", "--alias", "qwen3-1.7b", "--host", "0.0.0.0", "--port", "8080",
+              "--ctx-size", "4096", "--parallel", "2", "--jinja"]
+    volumes: ["llm-models:/models:ro"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 10
+    depends_on:
+      llm-model: { condition: service_completed_successfully }
+  # Одноразово скачивает модель по закреплённой ревизии и сверяет SHA-256; при повторных запусках — мгновенно
+  llm-model:
+    image: alpine:3.20
+    restart: "no"
+    volumes: ["llm-models:/models"]
+    environment:
+      MODEL_URL: https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/resolve/90862c4b9d2787eaed51d12237eafdfe7c5f6077/Qwen3-1.7B-Q8_0.gguf
+      MODEL_SHA256: 061b54daade076b5d3362dac252678d17da8c68f07560be70818cace6590cb1a
+      MODEL_FILE: /models/Qwen3-1.7B-Q8_0.gguf
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -e
+        if [ -f "$$MODEL_FILE" ] && echo "$$MODEL_SHA256  $$MODEL_FILE" | sha256sum -c -s; then echo "модель уже скачана"; exit 0; fi
+        echo "скачиваем модель (1,8 ГБ, один раз)..."
+        wget -q -O "$$MODEL_FILE.part" "$$MODEL_URL"
+        echo "$$MODEL_SHA256  $$MODEL_FILE.part" | sha256sum -c -s || { echo "контрольная сумма не совпала"; rm -f "$$MODEL_FILE.part"; exit 1; }
+        mv "$$MODEL_FILE.part" "$$MODEL_FILE"; echo "готово"
+
   app:
     build: { context: ., dockerfile: app/Dockerfile }
     restart: unless-stopped
@@ -30,11 +65,18 @@ services:
       FNS_URL: http://mock-fns:4001
       BKI_URL: http://mock-bki:4002
       STATEMENT_URL: http://mock-statement:4003
+      LLM_ENABLED: ${LLM_ENABLED:-1}
+      LLM_URL: http://llm:8080
+      LLM_MODEL: qwen3-1.7b
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-15000}
     volumes: ["cabinet-data:/srv/data"]
     depends_on:
       mock-fns: { condition: service_healthy }
       mock-bki: { condition: service_healthy }
       mock-statement: { condition: service_healthy }
+      # Не обязательна: если модель не поднялась, кабинет всё равно стартует
+      llm: { condition: service_started, required: false }
 
 volumes:
   cabinet-data:
+  llm-models:
