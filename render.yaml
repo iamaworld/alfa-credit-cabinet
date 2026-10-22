@@ -1,0 +1,17 @@
+# Развёртывание облачной демо-версии на Render (бесплатный тариф): Dashboard → New → Blueprint → этот репозиторий.
+# Бесплатный сервис засыпает без запросов: первое открытие после простоя — до минуты.
+# База SQLite живёт внутри контейнера и сбрасывается при перезапуске; тестовые аккаунты создаются заново.
+services:
+  - type: web
+    name: alfa-credit-cabinet
+    runtime: docker
+    dockerfilePath: ./Dockerfile.cloud
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: APP_SECRET
+        generateValue: true
+      - key: SECURE_COOKIES
+        value: "1"
+      - key: SEED
+        value: "1"

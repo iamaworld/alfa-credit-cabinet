@@ -1,0 +1,24 @@
+# Облачная демо-версия одним контейнером (бесплатные тарифы: ~512 МБ памяти).
+# Приложение и три мока в одном процессе (scripts/dev.mjs); языковая модель не запускается —
+# ИИ-помощник работает в запасном режиме по правилам. Полная версия с моделью: docker compose up --build.
+FROM node:22-alpine
+ENV NODE_ENV=production \
+    PORT=3000 \
+    DB_PATH=/srv/data/cabinet.db \
+    DOCS_DIR=/srv/docs \
+    LLM_ENABLED=0
+WORKDIR /srv/app
+COPY app/package.json app/package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY app/src ./src
+COPY app/public ./public
+COPY mocks/src /srv/mocks/src
+COPY mocks/package.json /srv/mocks/package.json
+COPY scripts/dev.mjs /srv/scripts/dev.mjs
+COPY docs/openapi.yaml /srv/docs/openapi.yaml
+RUN mkdir -p /srv/data && chown -R node:node /srv/data /srv/app
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "--disable-warning=ExperimentalWarning", "/srv/scripts/dev.mjs"]
