@@ -122,6 +122,15 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read);
+CREATE TABLE IF NOT EXISTS autopilot (
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  inn TEXT NOT NULL,
+  reserve_share REAL NOT NULL DEFAULT 0,
+  protection_limit INTEGER NOT NULL DEFAULT 0,
+  protection_rate REAL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, inn)
+);
 CREATE TABLE IF NOT EXISTS idempotency (
   key TEXT NOT NULL,
   user_id INTEGER NOT NULL,

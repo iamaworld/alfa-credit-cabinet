@@ -1,5 +1,5 @@
-import { h, clear, rub, pct1, months, date, age, badge, meter, factorList, skeleton, toast, productIcon, rateRange, icon, cashChart, monthName, compactRub } from '../ui.js';
-import { get, post, products } from '../api.js';
+import { h, clear, rub, pct1, months, date, age, badge, meter, factorList, skeleton, toast, productIcon, rateRange, icon, cashChart, monthName, monthUntil, compactRub } from '../ui.js';
+import { get, post, put, products } from '../api.js';
 import { session, go } from '../nav.js';
 
 export async function homePage(root) {
@@ -44,7 +44,7 @@ async function renderCompany(root, company, all) {
   const inn = company.inn;
   const [info, offers, feed, apps, prods, cash] = await Promise.all([
     get(`/companies/${inn}`), get(`/companies/${inn}/offers`), get(`/companies/${inn}/feed`), get('/applications'), products(),
-    get(`/companies/${inn}/cashflow`).catch(() => ({ available: false })),
+    get(`/companies/${inn}/autopilot`).catch(() => ({ available: false })),
   ]);
   const pname = Object.fromEntries(prods.products.map((p) => [p.id, p.name]));
   const avail = offers.offers.filter((o) => o.available);
@@ -140,13 +140,14 @@ function questCard(q) {
 }
 
 function feedItem(i) {
-  const tag = i.kind === 'alert' ? badge('Важно', 'danger') : i.kind === 'event' ? badge('Скоро', 'blue') : i.kind === 'calm' ? badge('Всё спокойно', 'success') : i.kind === 'support' ? badge('Возможно подойдёт', 'blue') : null;
+  const tag = i.kind === 'auto' ? badge('Автопилот', 'success') : i.kind === 'alert' ? badge('Важно', 'danger') : i.kind === 'event' ? badge('Скоро', 'blue') : i.kind === 'calm' ? badge('Всё спокойно', 'success') : i.kind === 'support' ? badge('Возможно подойдёт', 'blue') : null;
   return h('article', { class: 'stack feed-item' },
     tag ? h('div', null, tag) : null,
     h('b', null, i.title),
     h('p', { class: 'muted small' }, i.text),
     i.note ? h('p', { class: 'hint' }, i.note) : null,
-    i.link ? h('a', { class: i.kind === 'alert' ? 'btn small' : 'link', href: i.link }, i.linkText || 'Открыть') : null);
+    i.link === '#/autopilot' ? h('button', { class: 'btn small', type: 'button', onclick: () => document.getElementById('autopilot')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, i.linkText)
+      : i.link ? h('a', { class: i.kind === 'alert' ? 'btn small' : 'link', href: i.link }, i.linkText || 'Открыть') : null);
 }
 
 // «Опишите задачу своими словами»: локальная модель превращает фразу в цель, сумму и срок,
@@ -191,26 +192,80 @@ function assistantCard(inn) {
     status);
 }
 
-// Денежный календарь: прогноз остатка на год по выписке; разрывы видны заранее, их можно закрыть в один клик
-function cashCard(inn, cf, blocked = false) {
-  if (!cf.available) {
-    return h('section', { class: 'card stack' }, h('h2', null, 'Денежный календарь'),
-      h('p', { class: 'muted' }, cf.reason === 'no_statement'
-        ? 'Банк пока не видит ваш расчётный счёт. Когда выписка подключена, здесь появится прогноз денег на год: в какие месяцы может не хватить и чем закрыть разрыв заранее.'
+// Денежный календарь с автопилотом: прогноз остатка на год, копилка под крупный платёж и автозащита от разрыва.
+// Карточка перерисовывает себя после каждого изменения настроек.
+function cashCard(inn, ap, blocked = false) {
+  const box = h('section', { class: 'card stack', id: 'autopilot' });
+  const pct = (x) => `${Math.round(x * 100)} %`;
+  const save = async (patch, errBox) => {
+    try { draw(await put(`/companies/${inn}/autopilot`, { reserveShare: ap.settings.reserveShare, protectionLimit: ap.settings.protectionLimit, ...patch })); toast('Автопилот обновлён'); }
+    catch (e) { errBox.textContent = e.message; errBox.hidden = false; }
+  };
+  function draw(next) {
+    ap = next;
+    if (!ap.available) {
+      clear(box).append(h('h2', null, 'Денежный календарь'), h('p', { class: 'muted' }, ap.reason === 'no_statement'
+        ? 'Банк пока не видит ваш расчётный счёт. Когда выписка подключена, здесь появится прогноз денег на год: в какие месяцы может не хватить и как закрыть разрыв заранее — сначала без кредита.'
         : 'Истории по счёту пока мало для прогноза: нужно хотя бы два месяца операций.'));
+      return;
+    }
+    const cf = ap.cashflow, gap = cf.gaps[0], st = ap.settings, res = ap.result, sug = ap.suggestion;
+    const on = st.reserveShare > 0 || st.protectionLimit > 0;
+    const closed = gap && on && !res.gapsLeft.length;
+    const status = !gap ? h('span', { class: 'badge success' }, icon('check', 16), 'Разрывов не видно')
+      : closed ? h('span', { class: 'badge success' }, icon('check', 16), 'Автопилот закрывает разрыв')
+        : h('span', { class: 'badge danger' }, icon('warn', 16), `Разрыв: ${monthName(gap.month).toLowerCase()}`);
+
+    // Копилка
+    const rErr = h('p', { class: 'err', hidden: true });
+    const shares = [];
+    for (let x = 0.01; x <= ap.maxReserveShare + 1e-9; x += 0.01) shares.push(Math.round(x * 100) / 100);
+    const reserveRow = h('div', { class: 'ap-row' },
+      h('div', { class: 'ap-icon' }, icon('wallet', 22)),
+      h('div', { class: 'stack ap-body' },
+        h('div', { class: 'row between' }, h('b', null, 'Копилка под крупные платежи'),
+          ap.maxReserveShare > 0 ? h('label', { class: 'switch' }, h('input', { type: 'checkbox', checked: st.reserveShare > 0, 'aria-label': 'Копилка',
+            onchange: (e) => save({ reserveShare: e.target.checked ? (sug?.reserveShare || shares[0] || 0.01) : 0 }, rErr) }), h('i')) : null),
+        ap.maxReserveShare === 0 ? h('p', { class: 'small muted' }, 'Из бизнеса сейчас ничего не выводится — откладывать не из чего.')
+          : st.reserveShare > 0 ? h('div', { class: 'stack' },
+            h('div', { class: 'chips wrap' }, shares.map((x) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(x === st.reserveShare), onclick: () => save({ reserveShare: x }, rErr) }, pct(x)))),
+            h('p', { class: 'small muted' }, res.reserveTotal
+              ? `Откладываем ${pct(st.reserveShare)} поступлений из того, что выводится из бизнеса, ${res.reserveUntil ? monthUntil(res.reserveUntil) : ''}. Накопится около ${compactRub(res.reserveTotal)} ₽ — деньги остаются на вашем счёте.`
+              : 'Разрывов впереди нет — копилка пока не нужна.'))
+            : h('p', { class: 'small muted' }, sug?.reserveShare ? `Если откладывать ${pct(sug.reserveShare)} поступлений, ${sug.reserveCloses ? 'разрыв закроется без кредита' : 'разрыв станет меньше'}.` : 'Часть поступлений откладывается заранее — к крупному платежу деньги уже есть.'),
+        rErr));
+
+    // Защита
+    const pErr = h('p', { class: 'err', hidden: true });
+    const defaultLimit = sug?.protectionLimit || Math.max(100_000, Math.ceil((Math.abs(Math.min(0, cf.minBalance)) * 1.15) / 50_000) * 50_000);
+    const protectRow = h('div', { class: 'ap-row' },
+      h('div', { class: 'ap-icon' }, icon('lightning', 22)),
+      h('div', { class: 'stack ap-body' },
+        h('div', { class: 'row between' }, h('b', null, 'Защита от разрыва'),
+          h('label', { class: 'switch' }, h('input', { type: 'checkbox', checked: st.protectionLimit > 0, 'aria-label': 'Защита от разрыва',
+            onchange: (e) => save({ protectionLimit: e.target.checked ? defaultLimit : 0 }, pErr).then(() => { if (pErr.textContent) e.target.checked = false; }) }), h('i'))),
+        st.protectionLimit > 0
+          ? h('p', { class: 'small muted' }, `Одобрено: лимит до ${compactRub(st.protectionLimit)} ₽, ставка ${String(st.rate).replace('.', ',')} %. Пока не используется — бесплатно. ${res.protectionMax ? `По прогнозу понадобится до ${compactRub(res.protectionMax)} ₽, проценты около ${compactRub(res.interest)} ₽; долг гасится поступлениями.` : 'По прогнозу не понадобится.'}`)
+          : h('p', { class: 'small muted' }, `Резервный лимит включается сам, только когда остаток уходит в минус, и гасится поступлениями. Лимит проверяет банк${blocked ? ' — пока есть просрочка, он не одобрится' : ''}.`),
+        pErr));
+
+    clear(box).append(...[
+      h('div', { class: 'cash-head' },
+        h('div', null, h('h2', null, 'Деньги на счёте: прогноз на год'),
+          h('p', { class: 'muted' }, 'По вашей выписке: зарплата, аренда, поставщики, налоги и то, что повторяется каждый год.')),
+        status),
+      cashChart(cf, on ? { withLoan: true, labels: { base: 'Без автопилота', loan: 'С автопилотом' }, caption: 'Прогноз остатка без автопилота и с ним' }
+        : { caption: `Прогноз остатка на счёте на 12 месяцев. Минимум ${compactRub(cf.minBalance)} ₽, ${monthName(cf.minMonth).toLowerCase()}.` }),
+      gap && !closed && !on && cf.suggestion ? h('p', null, h('b', null, cf.suggestion.reason), sug?.reserveCloses ? ' Можно обойтись без кредита — включите копилку ниже.' : '') : null,
+      h('div', { class: 'stack' }, h('h3', null, 'Автопилот денег'),
+        h('p', { class: 'hint' }, 'Банк ведёт деньги в фоне в границах, которые вы задали: сначала откладывает, и только если не хватает — подстраховывает лимитом.'),
+        reserveRow, protectRow),
+      gap && !closed && !blocked && cf.suggestion && !sug?.reserveCloses && !st.protectionLimit ? h('div', { class: 'cash-cta' },
+        h('p', null, 'Или оформите овердрафт под этот разрыв сразу.'),
+        h('a', { class: 'btn line', href: `#/offer/${inn}?product=${cf.suggestion.product}&amount=${cf.suggestion.amount}&term=${cf.suggestion.term}&purpose=${cf.suggestion.purpose}&from=calendar` }, 'Подобрать овердрафт')) : null,
+      h('p', { class: 'hint' }, 'Учебная модель: показывает форму денежного потока, а не точную сумму.'),
+    ].filter(Boolean));
   }
-  const gap = cf.gaps[0];
-  const s = cf.suggestion;
-  return h('section', { class: 'card stack' },
-    h('div', { class: 'cash-head' },
-      h('div', null, h('h2', null, 'Деньги на счёте: прогноз на год'),
-        h('p', { class: 'muted' }, 'По вашей выписке: зарплата, аренда, поставщики, налоги и то, что повторяется каждый год.')),
-      gap ? h('span', { class: 'badge danger' }, icon('warn', 16), `Разрыв: ${monthName(gap.month).toLowerCase()}`)
-        : h('span', { class: 'badge success' }, icon('check', 16), 'Разрывов не видно')),
-    cashChart(cf, { caption: `Прогноз остатка на счёте на 12 месяцев. Минимум ${compactRub(cf.minBalance)} ₽, ${monthName(cf.minMonth).toLowerCase()}.` }),
-    s && blocked ? h('div', { class: 'cash-cta' }, h('p', null, h('b', null, s.reason), ' Пока есть просрочка по кредиту, новый кредит недоступен: заложите эти расходы заранее или сдвиньте крупные платежи.'))
-    : s ? h('div', { class: 'cash-cta' },
-      h('p', null, h('b', null, s.reason), ' Овердрафт закроет разрыв заранее: проценты — только за дни, когда деньги нужны.'),
-      h('a', { class: 'btn', href: `#/offer/${inn}?product=${s.product}&amount=${s.amount}&term=${s.term}&purpose=${s.purpose}&from=calendar` }, 'Закрыть разрыв'))
-      : h('p', { class: 'hint' }, `Минимальный остаток по прогнозу — ${compactRub(cf.minBalance)} ₽ (${monthName(cf.minMonth).toLowerCase()}). Учебная модель: показывает форму денежного потока, а не точную сумму.`));
+  draw(ap);
+  return box;
 }

@@ -6,9 +6,10 @@ import { parseInn, parseRequest } from '../util/validate.js';
 import { PRODUCTS, PURPOSES, ENGINE_VERSION } from '../engine/products.js';
 import { preview, preapprovedOffers, productFit, OFFER_VALID_DAYS } from '../engine/offer.js';
 import { buildFeed } from '../services/feed.js';
-import { forecastCashflow } from '../engine/cashflow.js';
+import { forecastCashflow, simulateAutopilot, suggestAutopilot } from '../engine/cashflow.js';
+import { evaluate } from '../engine/scoring.js';
 import { briefFor } from '../services/brief.js';
-import { DEFAULT_POLICY } from '../engine/decision.js';
+import { DEFAULT_POLICY, decide } from '../engine/decision.js';
 import { idempotent } from '../util/idempotency.js';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '../seed.js';
 
@@ -115,7 +116,46 @@ export function createApi({ db, config, apps, contexts, notifications, enrichmen
     const inn = needInn(req);
     const { ctx, data } = await contexts.get(inn);
     const list = apps.listFor(req.user).filter((a) => a.inn === inn).map((a) => ({ ...a }));
-    res.json(buildFeed({ ctx, fns: data.fns, applications: list, cashflow: forecastCashflow({ statement: data.statement?.months }), inn }));
+    const ap = await autopilotView(req.user, inn);
+    res.json(buildFeed({ ctx, fns: data.fns, applications: list, cashflow: forecastCashflow({ statement: data.statement?.months }), inn, autopilot: ap.available ? ap : null }));
+  }));
+
+  // ----- автопилот денег: копилка под крупный платёж и автозащита от разрыва -----
+  const apGet = db.prepare('SELECT reserve_share AS reserveShare, protection_limit AS protectionLimit, protection_rate AS rate, updated_at AS updatedAt FROM autopilot WHERE user_id = ? AND inn = ?');
+  const apPut = db.prepare(`INSERT INTO autopilot (user_id, inn, reserve_share, protection_limit, protection_rate, updated_at) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(user_id, inn) DO UPDATE SET reserve_share = excluded.reserve_share, protection_limit = excluded.protection_limit, protection_rate = excluded.protection_rate, updated_at = excluded.updated_at`);
+  async function autopilotView(user, inn) {
+    const { data } = await contexts.get(inn);
+    const cf = forecastCashflow({ statement: data.statement?.months });
+    if (!cf) return { available: false, reason: data.statement ? 'short_history' : 'no_statement' };
+    const settings = apGet.get(user.id, inn) || { reserveShare: 0, protectionLimit: 0, rate: null };
+    const maxReserveShare = Math.min(0.2, Math.ceil(Math.max(0, ...cf.forecast.map((f) => (f.owner || 0) / f.inflow)) * 100) / 100);
+    const sim = simulateAutopilot(cf, { reserveShare: settings.reserveShare, protectionLimit: settings.protectionLimit, rate: settings.rate || 0 });
+    const forecast = cf.forecast.map((f, i) => ({ ...f, balanceWithLoan: sim.months[i].balanceAuto, reserve: sim.months[i].reserve, protection: sim.months[i].protection }));
+    return { available: true, settings, maxReserveShare, suggestion: suggestAutopilot(cf), result: sim, cashflow: { ...cf, forecast }, firstGap: cf.gaps[0]?.month || null };
+  }
+  r.get('/companies/:inn/autopilot', requireRole('client'), wrap(async (req, res) => res.json(await autopilotView(req.user, needInn(req)))));
+  r.put('/companies/:inn/autopilot', requireRole('client'), wrap(async (req, res) => {
+    const inn = needInn(req);
+    const view = await autopilotView(req.user, inn);
+    if (!view.available) throw badRequest('Автопилоту нужна выписка по счёту');
+    const share = Math.round(Number(req.body?.reserveShare ?? 0) * 100) / 100;
+    if (!(share >= 0 && share <= view.maxReserveShare)) throw badRequest(`Откладывать можно от 0 до ${Math.round(view.maxReserveShare * 100)} % — не больше, чем сейчас выводится из бизнеса`, { field: 'reserveShare' });
+    const limit = Math.round(Number(req.body?.protectionLimit ?? 0) / 10_000) * 10_000;
+    let rate = null;
+    if (limit) {
+      if (limit < PRODUCTS.overdraft.min || limit > PRODUCTS.overdraft.max) throw badRequest(`Лимит защиты — от ${PRODUCTS.overdraft.min.toLocaleString('ru-RU')} до ${PRODUCTS.overdraft.max.toLocaleString('ru-RU')} ₽`, { field: 'protectionLimit' });
+      // Защита — это настоящий лимит: его одобряет тот же движок и та же политика, что и заявку
+      const { ctx } = await contexts.get(inn);
+      const d = decide(ctx, { product: 'overdraft', amount: limit, term: 12, collateral: false });
+      if (d.outcome !== 'approve' || d.routing !== 'auto') {
+        const why = d.explain?.reasons?.[0]?.message || 'лимит такого размера сейчас не одобряется автоматически';
+        throw new AppError(422, 'protection_declined', `Банк не может включить защиту на ${limit.toLocaleString('ru-RU')} ₽: ${why.charAt(0).toLowerCase()}${why.slice(1)}`, { field: 'protectionLimit' });
+      }
+      rate = evaluate(ctx, { product: 'overdraft', amount: limit, term: 12, collateral: false }).rate.value;
+    }
+    apPut.run(req.user.id, inn, share, limit, rate, nowIso());
+    res.json(await autopilotView(req.user, inn));
   }));
 
   // ----- денежный календарь: прогноз остатка на 12 месяцев по выписке -----

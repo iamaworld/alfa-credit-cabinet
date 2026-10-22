@@ -1,7 +1,7 @@
 // Лента для клиента: подсказки, примеры мер поддержки и «готовность к кредиту».
 // Содержимое синтетическое. Меры поддержки — гипотеза продукта, а не справочник реальных программ.
 import { PRODUCTS } from '../engine/products.js';
-import { monthIn } from '../engine/cashflow.js';
+import { monthIn, monthUntil } from '../engine/cashflow.js';
 
 const TIPS = {
   trade: { title: 'Торговля: считайте оборот по месяцам', text: 'Сезонные провалы выручки снижают оценку стабильности. Равномерные поступления на счёт повышают шансы.' },
@@ -22,10 +22,23 @@ const k = (n) => `${Math.round(Math.abs(n) / 1000).toLocaleString('ru-RU')} ты
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
 // События из денежного календаря: лента у каждого клиента своя, потому что строится из прогноза его денег
-function cashflowItems(cf, inn, creditBlocked) {
+function cashflowItems(cf, inn, creditBlocked, ap) {
   if (!cf) return [{ kind: 'tip', id: 'cf-none', title: 'Денежный календарь появится после подключения счёта', text: 'По выписке мы заранее покажем месяцы, когда денег может не хватить, и предложим, чем закрыть разрыв.' }];
   const items = [];
-  if (cf.suggestion && creditBlocked) {
+  const on = ap && (ap.settings.reserveShare > 0 || ap.settings.protectionLimit > 0);
+  const pct = (x) => `${Math.round(x * 100)} %`;
+  if (cf.suggestion && on && !ap.result.gapsLeft.length) {
+    // Автопилот включён и закрывает разрыв — говорим, что он сделает, кредит не предлагаем
+    const parts = [];
+    if (ap.result.reserveTotal) parts.push(`откладывает ${pct(ap.settings.reserveShare)} поступлений ${monthUntil(ap.result.reserveUntil)} — накопится около ${k(ap.result.reserveTotal)}`);
+    if (ap.result.protectionMax) parts.push(`защита возьмёт до ${k(ap.result.protectionMax)}, проценты около ${k(ap.result.interest)}`);
+    items.push({ kind: 'auto', id: 'cf-auto', title: `Автопилот закроет разрыв ${monthIn(cf.gaps[0].month)}`, text: `${cap(parts.join('; '))}. Делать ничего не нужно.` });
+  } else if (cf.suggestion && !creditBlocked && ap?.suggestion?.reserveCloses) {
+    // Сначала — способ без кредита
+    items.push({ kind: 'alert', id: `cf-gap-${cf.minMonth}`, title: `${cap(monthIn(cf.gaps[0].month))} может не хватить денег`,
+      text: `${cf.suggestion.reason} Можно обойтись без кредита: если откладывать ${pct(ap.suggestion.reserveShare)} поступлений в копилку, к этому месяцу деньги будут.`,
+      link: '#/autopilot', linkText: 'Включить копилку' });
+  } else if (cf.suggestion && creditBlocked) {
     // Кредит сейчас недоступен (стоп-фактор) — предупреждаем о разрыве, но не предлагаем то, что точно откажут
     items.push({ kind: 'alert', id: `cf-gap-${cf.minMonth}`, title: `${cap(monthIn(cf.gaps[0].month))} может не хватить денег`, text: `${cf.suggestion.reason} Пока есть стоп-фактор, кредит недоступен: заложите эти расходы заранее или сдвиньте крупные платежи.` });
   } else if (cf.suggestion) {
@@ -42,7 +55,7 @@ function cashflowItems(cf, inn, creditBlocked) {
   return items;
 }
 
-export function buildFeed({ ctx, fns, applications, cashflow = null, inn = ctx.inn }) {
+export function buildFeed({ ctx, fns, applications, cashflow = null, inn = ctx.inn, autopilot = null }) {
   const items = [];
   const checklist = [
     { id: 'registry', label: 'Компания найдена в реестре', done: ctx.status === 'ACTIVE' },
@@ -55,7 +68,7 @@ export function buildFeed({ ctx, fns, applications, cashflow = null, inn = ctx.i
   const done = checklist.filter((c) => c.done).length;
   items.push({ kind: 'quest', id: 'readiness', title: 'Готовность к кредиту', progress: { done, total: checklist.length }, checklist });
 
-  items.push(...cashflowItems(cashflow, inn, ctx.status !== 'ACTIVE' || ctx.bki.currentOverdue.length > 0));
+  items.push(...cashflowItems(cashflow, inn, ctx.status !== 'ACTIVE' || ctx.bki.currentOverdue.length > 0, autopilot));
 
   const pending = applications.find((a) => ['needs_info', 'counter_offer', 'approved', 'signing'].includes(a.status));
   if (pending) items.push({ kind: 'news', id: `app-${pending.id}`, title: `Заявка ${pending.number}: ${pending.statusTitle}`, text: 'Для этой заявки нужно ваше действие.', link: `#/applications/${pending.id}` });

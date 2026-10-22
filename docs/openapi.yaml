@@ -111,6 +111,42 @@ paths:
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: object, properties: { offers: { type: array, items: { $ref: '#/components/schemas/PreapprovedOffer' } }, degraded: { type: boolean }, validDays: { type: integer } } } } } }
         '403': { $ref: '#/components/responses/Error' }
+  /api/companies/{inn}/autopilot:
+    get:
+      tags: [Company]
+      summary: Автопилот денег — настройки, подсказка и прогноз с копилкой и защитой
+      description: |
+        Копилка откладывает долю поступлений из вывода собственнику в месяцы до разрыва (не больше, чем выводится).
+        Защита — резервный лимит овердрафта: берётся, только когда остаток уходит в минус, проценты — за использованную сумму.
+        В ответе — прогноз календаря, где balanceWithLoan — остаток с автопилотом.
+      parameters: [{ name: inn, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          description: Состояние автопилота
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+                  settings: { type: object, properties: { reserveShare: { type: number, example: 0.01 }, protectionLimit: { type: integer }, rate: { type: number, nullable: true } } }
+                  maxReserveShare: { type: number }
+                  suggestion: { type: object, nullable: true, properties: { reserveShare: { type: number }, reserveCloses: { type: boolean }, protectionLimit: { type: integer } } }
+                  result: { type: object, properties: { reserveTotal: { type: integer }, reserveMonths: { type: integer }, reserveUntil: { type: string, nullable: true }, protectionMax: { type: integer }, interest: { type: integer }, gapsLeft: { type: array, items: { type: string } } } }
+                  cashflow: { type: object }
+        '403': { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Company]
+      summary: Включить или настроить автопилот
+      description: Лимит защиты проходит тот же движок и ту же политику, что и заявка; если автоматически не одобряется — 422 с причиной.
+      parameters: [{ name: inn, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { reserveShare: { type: number, minimum: 0, maximum: 0.2, example: 0.01 }, protectionLimit: { type: integer, example: 300000 } } } } }
+      responses:
+        '200': { description: Обновлённое состояние, как в GET }
+        '400': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
   /api/companies/{inn}/cashflow:
     get:
       tags: [Company]

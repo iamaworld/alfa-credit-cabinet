@@ -164,6 +164,8 @@ const MON = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл
 const MON_FULL = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 export const monthShort = (ym) => MON[Number(ym.slice(5, 7)) - 1];
 export const monthName = (ym) => `${MON_FULL[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+const MON_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+export const monthUntil = (ym) => `до ${MON_GEN[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
 export const compactRub = (n) => {
   const a = Math.abs(n), s = n < 0 ? '−' : '';
   if (a >= 1_000_000) return `${s}${String(+(a / 1_000_000).toFixed(1)).replace('.', ',')} млн`;
@@ -185,14 +187,14 @@ function niceStep(range) {
  * @param {{history: Array, forecast: Array}} cf  ответ /cashflow или поле cashflow из пересчёта
  * @param {{withLoan?: boolean, height?: number, caption: string}} opts
  */
-export function cashChart(cf, { withLoan = false, height = 240, caption }) {
+export function cashChart(cf, { withLoan = false, height = 240, caption, labels = { base: 'Без кредита', loan: 'С кредитом' } }) {
   const points = [...cf.history.map((p) => ({ ...p, actual: true })), ...cf.forecast.map((p) => ({ ...p, actual: false }))];
   const wrap = h('div', { class: 'cash-chart' });
   const tip = h('div', { class: 'cash-tip', hidden: true, role: 'status' });
   const plot = h('div', { class: 'cash-plot', role: 'img', 'aria-label': caption });
   const legend = withLoan ? h('div', { class: 'cash-legend' },
-    h('span', null, h('i', { style: { background: SERIES.base } }), 'Без кредита'),
-    h('span', null, h('i', { style: { background: SERIES.loan } }), 'С кредитом'),
+    h('span', null, h('i', { style: { background: SERIES.base } }), labels.base),
+    h('span', null, h('i', { style: { background: SERIES.loan } }), labels.loan),
     h('span', null, h('i', { class: 'dash' }), 'Пунктир — прогноз')) : h('div', { class: 'cash-legend' }, h('span', null, h('i', { class: 'solid' }), 'Факт'), h('span', null, h('i', { class: 'dash' }), 'Прогноз'));
 
   function draw() {
@@ -236,8 +238,8 @@ export function cashChart(cf, { withLoan = false, height = 240, caption }) {
         cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
         clear(tip).append(...[
           h('b', null, `${monthName(p.month)}${p.actual ? '' : ' · прогноз'}`),
-          h('div', { class: 'row between' }, h('span', null, withLoan ? 'Без кредита' : 'Остаток'), h('b', { class: p.balance < 0 ? 'neg' : '' }, `${compactRub(p.balance)} ₽`)),
-          withLoan && !p.actual ? h('div', { class: 'row between' }, h('span', null, 'С кредитом'), h('b', { class: p.balanceWithLoan < 0 ? 'neg' : '' }, `${compactRub(p.balanceWithLoan)} ₽`)) : null,
+          h('div', { class: 'row between' }, h('span', null, withLoan ? labels.base : 'Остаток'), h('b', { class: p.balance < 0 ? 'neg' : '' }, `${compactRub(p.balance)} ₽`)),
+          withLoan && !p.actual ? h('div', { class: 'row between' }, h('span', null, labels.loan), h('b', { class: p.balanceWithLoan < 0 ? 'neg' : '' }, `${compactRub(p.balanceWithLoan)} ₽`)) : null,
           h('div', { class: 'row between muted' }, h('span', null, 'Поступления'), h('span', null, `+${compactRub(p.inflow)}`)),
           h('div', { class: 'row between muted' }, h('span', null, 'Списания'), h('span', null, `−${compactRub(p.outflow)}`)),
           ...(p.events || []).map((e) => h('div', { class: 'small' }, `• ${e.label}: ${compactRub(e.amount)} ₽`))].filter(Boolean));
@@ -255,7 +257,7 @@ export function cashChart(cf, { withLoan = false, height = 240, caption }) {
 
   const table = h('details', { class: 'why cash-table' }, h('summary', null, 'Таблица по месяцам'),
     h('div', { class: 'scroll-x' }, h('table', { class: 'tbl sched' },
-      h('thead', null, h('tr', null, ['Месяц', 'Поступления', 'Списания', withLoan ? 'Остаток без кредита' : 'Остаток', withLoan ? 'С кредитом' : null, 'События'].filter(Boolean).map((t) => h('th', null, t)))),
+      h('thead', null, h('tr', null, ['Месяц', 'Поступления', 'Списания', withLoan ? labels.base : 'Остаток', withLoan ? labels.loan : null, 'События'].filter(Boolean).map((t) => h('th', null, t)))),
       h('tbody', null, points.map((p) => h('tr', null,
         h('td', null, `${monthName(p.month)}${p.actual ? '' : ' (прогноз)'}`), h('td', { class: 'num' }, rub(p.inflow)), h('td', { class: 'num' }, rub(p.outflow)),
         h('td', { class: 'num' }, rub(p.balance)), withLoan ? h('td', { class: 'num' }, p.actual ? '—' : rub(p.balanceWithLoan)) : null,

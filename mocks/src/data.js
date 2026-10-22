@@ -88,10 +88,11 @@ export const CREDIT_HISTORY = {
 // Списания структурные — зарплата, аренда, поставщики, налоги, разовые и ежегодные события, —
 // чтобы по выписке можно было построить денежный календарь. Доли — от базового месячного оборота.
 //   events: m — месяц года (1–12), share — доля оборота, recurring — повторяется ли каждый год
+//   owner — часть поступлений, которую собственник выводит из бизнеса (входит в долю suppliers, а не сверх неё)
 export const STATEMENTS = {
   '7701234567': {
     base: 4800000, cv: 0.07, negativeDays: 0, minBalanceShare: 0.25,
-    opening: 0.8, payroll: 0.4, rent: 0.06, suppliers: 0.46, other: 0, taxQuarter: 0.035,
+    opening: 0.8, payroll: 0.4, rent: 0.06, suppliers: 0.46, owner: 0.04, other: 0, taxQuarter: 0.035,
     events: [
       { m: 3, label: 'Страховка и техосмотр парка', share: 0.5, recurring: true },
       { m: 4, label: 'Налог УСН за год', share: 0.12, recurring: true },
@@ -101,7 +102,7 @@ export const STATEMENTS = {
   },
   '500100732259': {
     base: 1650000, cv: 0.2, negativeDays: 2, minBalanceShare: 0.08,
-    opening: -0.04, payroll: 0.22, rent: 0.09, suppliers: 0.575, other: 0.02, taxQuarter: 0.025,
+    opening: -0.04, payroll: 0.22, rent: 0.09, suppliers: 0.575, owner: 0.03, other: 0.02, taxQuarter: 0.025,
     events: [
       { m: 2, label: 'Закупка товара к весеннему сезону', share: 0.3, recurring: true },
       { m: 8, label: 'Закупка к школьному сезону', share: 0.28, recurring: true },
@@ -140,7 +141,8 @@ export function buildStatement(inn, monthsCount = 12, now = new Date()) {
     const breakdown = {
       payroll: r1000(p.base * p.payroll),
       rent: r1000(p.base * p.rent),
-      suppliers: r1000(inflow * p.suppliers * supplierJitter),
+      suppliers: r1000(inflow * (p.suppliers - (p.owner || 0)) * supplierJitter),
+      owner: r1000(inflow * (p.owner || 0)),
       taxes: [1, 4, 7, 10].includes(m) ? r1000(p.base * p.taxQuarter) : 0,
       other: r1000(p.base * p.other),
     };

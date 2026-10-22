@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { forecastCashflow } from '../src/engine/cashflow.js';
+import { forecastCashflow, simulateAutopilot, suggestAutopilot } from '../src/engine/cashflow.js';
 
 // Год выписки: +100 тыс. в месяц, в марте ежегодная страховка 900 тыс., в июле разовая покупка 500 тыс.
 function statement() {
@@ -12,7 +12,7 @@ function statement() {
     const events = [];
     if (m === 3) events.push({ label: 'Страховка', amount: 900_000, recurring: true });
     if (m === 7) events.push({ label: 'Покупка станка', amount: 500_000, recurring: false });
-    const breakdown = { payroll: 400_000, rent: 100_000, suppliers: 400_000, taxes: 0, other: 0 };
+    const breakdown = { payroll: 400_000, rent: 100_000, suppliers: 300_000, owner: 100_000, taxes: 0, other: 0 };
     const outflow = 900_000 + events.reduce((s, e) => s + e.amount, 0);
     balance += 1_000_000 - outflow;
     months.push({ month: d.toISOString().slice(0, 7), inflow: 1_000_000, outflow, balance, breakdown, events });
@@ -72,4 +72,30 @@ test('подсказка из календаря действительно за
   const s = base.suggestion;
   const cf = forecastCashflow({ statement: statement(), loan: { amount: s.amount, payment: 0, term: s.term, revolving: true, rate: 24 } });
   assert.equal(cf.withLoan.closesGaps, true);
+});
+
+test('копилка: откладывает из вывода собственнику до разрыва и закрывает его без кредита', () => {
+  const cf = forecastCashflow({ statement: statement() });
+  // разрыв −200 тыс. в марте (6-й месяц); 5 месяцев по 5 % от 1 млн = 250 тыс.
+  const sim = simulateAutopilot(cf, { reserveShare: 0.05 });
+  assert.equal(sim.reserveMonths, 6, 'копит, пока впереди есть разрыв (до апреля)');
+  assert.equal(sim.months[0].reserve, 50_000);
+  assert.deepEqual(sim.gapsLeft, []);
+  assert.ok(sim.months.every((m) => m.reserve <= 100_000), 'не больше, чем выводится');
+});
+
+test('подсказка автопилота: минимальная доля копилки, не больше доли вывода', () => {
+  const s = suggestAutopilot(forecastCashflow({ statement: statement() }));
+  assert.equal(s.reserveCloses, true);
+  assert.ok(s.reserveShare > 0 && s.reserveShare <= 0.1);
+  assert.equal(s.protectionLimit, 0);
+  assert.equal(simulateAutopilot(forecastCashflow({ statement: statement() }), { reserveShare: s.reserveShare - 0.01 }).gapsLeft.length > 0, true, 'на процент меньше — уже не хватает');
+});
+
+test('защита без копилки: берётся только в разрыв, проценты за использованное', () => {
+  const sim = simulateAutopilot(forecastCashflow({ statement: statement() }), { protectionLimit: 300_000, rate: 24 });
+  assert.equal(sim.months[0].protection, 0);
+  assert.equal(sim.protectionMax, 200_000);
+  assert.ok(sim.interest > 0 && sim.interest < 10_000);
+  assert.deepEqual(sim.gapsLeft, []);
 });
