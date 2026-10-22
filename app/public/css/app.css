@@ -340,7 +340,7 @@ ul.plain:first-child, ol.plan:first-child, .timeline:first-child { margin-top: 0
 .assistant-row { display: flex; gap: 12px; align-items: stretch; }
 .assistant-row textarea.input { min-height: 56px; flex: 1; resize: none; }
 .assistant-row .btn { flex: none; }
-.assistant .chip { font-size: 14px; font-weight: 400; text-align: left; white-space: normal; }
+.assistant .chip { font-size: 14px; font-weight: 400; text-align: left; white-space: normal; flex: 0 1 auto; max-width: 100%; }
 .understood { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; }
 .understood p { margin-top: 4px; }
 .understood-q p { color: var(--muted); font-style: italic; }
@@ -411,3 +411,28 @@ ul.plain:first-child, ol.plan:first-child, .timeline:first-child { margin-top: 0
   .mini-pay b { font-size: 20px; font-weight: 600; font-family: var(--font-head); }
   .page:has(.mini-pay) { padding-bottom: 176px; }
 }
+
+/* ---------- денежный календарь ---------- */
+.cash-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.cash-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cash-legend i { display: inline-block; width: 16px; height: 2px; border-radius: 2px; }
+.cash-legend i.solid { background: #2A77EF; }
+.cash-legend i.dash { background: repeating-linear-gradient(90deg, var(--muted) 0 4px, transparent 4px 7px); }
+.cash-stage { position: relative; margin-top: 8px; }
+.cash-plot svg { display: block; max-width: 100%; }
+.cash-grid { stroke: var(--line); stroke-width: 1; }
+.cash-zero { stroke: var(--ink); stroke-width: 1; opacity: .5; }
+.cash-today { stroke: var(--line-strong); stroke-width: 1; }
+.cash-axis { font: 11px var(--font-text); fill: var(--muted); }
+.cash-neg { fill: var(--bad-soft); }
+.cash-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.cash-line.dashed { stroke-dasharray: 5 4; }
+.cash-gap-dot { fill: var(--bad); stroke: #fff; stroke-width: 2; }
+.cash-cross { stroke: var(--ink); stroke-width: 1; opacity: .35; }
+.cash-tip { position: absolute; top: 8px; width: 220px; padding: 12px 14px; border-radius: 14px; background: #fff; box-shadow: var(--shadow-m); font-size: 13px; line-height: 18px; display: grid; gap: 4px; pointer-events: none; z-index: 2; }
+.cash-tip .neg { color: var(--bad); }
+.cash-table { margin-top: 12px; }
+.cash-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.cash-cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-radius: 16px; background: var(--bad-soft); }
+.cash-cta p { max-width: 60ch; }
+.cash-verdict { display: flex; gap: 10px; align-items: flex-start; }

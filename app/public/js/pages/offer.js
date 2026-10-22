@@ -1,4 +1,4 @@
-import { h, clear, rub, pct1, pct0, months, meter, factorList, debounce, toast, skeleton, moneyInput, paintRange, rateRange } from '../ui.js';
+import { h, clear, rub, pct1, pct0, months, meter, factorList, debounce, toast, skeleton, moneyInput, paintRange, rateRange, cashChart, monthName, compactRub, icon } from '../ui.js';
 import { get, post, patch, products } from '../api.js';
 import { go } from '../nav.js';
 
@@ -149,6 +149,7 @@ export async function offerPage(root, inn, params) {
     const helps = r.factors.filter((f) => f.direction === 'up');
     const hurts = r.factors.filter((f) => f.direction !== 'up');
     clear(explain).append(...[
+      r.cashflow ? cashImpact(r.cashflow) : null,
       r.changes?.length ? h('section', { class: 'card stack' }, h('h3', null, 'Что изменилось и почему'),
         h('ul', { class: 'plain' }, r.changes.map((c) => h('li', { class: 'change' }, c.text)))) : null,
       r.improvements?.length ? h('section', { class: 'card stack' }, h('h3', null, 'Что повысит шансы'),
@@ -166,7 +167,7 @@ export async function offerPage(root, inn, params) {
   clear(root).append(
     h('div', { class: 'crumbs' }, h('a', { href: draft ? `#/applications/${draftId}` : '#/' }, draft ? '← Вернуться к заявке' : '← Главная')),
     h('div', { class: 'page-head' }, h('h1', null, draft ? 'Изменить условия' : 'Подберите условия')),
-    params.get('from') === 'assistant' ? understoodCard() : null,
+    params.get('from') === 'assistant' ? understoodCard() : params.get('from') === 'calendar' ? h('div', { class: 'banner info' }, h('div', null, h('b', null, 'Условия подобраны под разрыв из денежного календаря. '), 'Ниже видно, как овердрафт ляжет на остаток по месяцам.')) : null,
     h('div', { class: 'offer-grid' },
       h('div', { class: 'stack offer-controls' },
         h('section', { class: 'card stack' },
@@ -204,4 +205,19 @@ function understoodCard() {
       h('p', null, h('b', null, a.summary)),
       a.notes?.length ? h('ul', { class: 'plain small muted' }, a.notes.map((n) => h('li', null, n))) : null,
       h('p', { class: 'hint' }, 'Это черновик условий: проверьте и поправьте ниже. Решение принимает банк по расчёту, а не помощник.')));
+}
+
+// Как кредит ляжет на деньги бизнеса: прогноз остатка без кредита и с ним
+function cashImpact(cf) {
+  const w = cf.withLoan;
+  const v = w.closesGaps && w.revolving ? ['ok', 'check', `Овердрафт закрывает разрыв: из лимита понадобится до ${compactRub(w.drawnMax)} ₽, проценты за год — около ${compactRub(w.interest)} ₽. Долг гасится поступлениями.`]
+    : w.closesGaps ? ['ok', 'check', `Кредит закрывает разрыв: остаток не уходит в минус весь год. Минимум — ${compactRub(w.minBalance)} ₽, ${monthName(w.minMonth).toLowerCase()}.`]
+    : w.createsGaps ? ['bad', 'warn', `С этим платежом остаток уйдёт в минус — ${monthName(w.gaps[0].month).toLowerCase()}. Попробуйте срок длиннее или сумму меньше.`]
+      : w.gaps.length ? ['bad', 'warn', `Остаток всё равно уходит в минус — ${monthName(w.gaps[0].month).toLowerCase()}. Нужна сумма больше или другой продукт.`]
+        : ['ok', 'check', `Платёж помещается: минимальный остаток с кредитом — ${compactRub(w.minBalance)} ₽, ${monthName(w.minMonth).toLowerCase()}.`];
+  return h('section', { class: 'card stack' },
+    h('div', null, h('h3', null, 'Как кредит ляжет на ваши деньги'), h('p', { class: 'hint' }, 'Прогноз остатка на счёте по вашей выписке — без кредита и с ним.')),
+    h('div', { class: `cash-verdict` }, h('span', { class: `arrow ${v[0] === 'ok' ? 'up' : 'down'}` }, icon(v[1], 16)), h('span', null, v[2])),
+    cashChart(cf, { withLoan: true, height: 220, caption: v[2] }),
+    w.revolving ? h('p', { class: 'hint' }, 'Овердрафт — лимит на счёте: деньги берутся, только когда остаток уходит в минус, и возвращаются с поступлениями. Платёж справа — консервативная оценка, если бы лимит был выбран целиком.') : null);
 }

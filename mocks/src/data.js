@@ -85,12 +85,40 @@ export const CREDIT_HISTORY = {
 };
 
 // Параметры генерации выписок. Нет записи: у клиента нет счетов в подключённых банках (ответ 404).
+// Списания структурные — зарплата, аренда, поставщики, налоги, разовые и ежегодные события, —
+// чтобы по выписке можно было построить денежный календарь. Доли — от базового месячного оборота.
+//   events: m — месяц года (1–12), share — доля оборота, recurring — повторяется ли каждый год
 export const STATEMENTS = {
-  '7701234567': { base: 4800000, cv: 0.07, negativeDays: 0, minBalanceShare: 0.25 },
-  '500100732259': { base: 1650000, cv: 0.2, negativeDays: 2, minBalanceShare: 0.08 },
-  '7743987654': { base: 160000, cv: 0.45, negativeDays: 12, minBalanceShare: 0.0 },
-  '7700000001': { base: 90000, cv: 0.3, negativeDays: 6, minBalanceShare: 0.02 },
+  '7701234567': {
+    base: 4800000, cv: 0.07, negativeDays: 0, minBalanceShare: 0.25,
+    opening: 0.8, payroll: 0.4, rent: 0.06, suppliers: 0.46, other: 0, taxQuarter: 0.035,
+    events: [
+      { m: 3, label: 'Страховка и техосмотр парка', share: 0.5, recurring: true },
+      { m: 4, label: 'Налог УСН за год', share: 0.12, recurring: true },
+      { m: 7, label: 'Покупка подержанного тягача', share: 0.6, recurring: false },
+      { m: 12, label: 'Годовые премии водителям', share: 0.18, recurring: true },
+    ],
+  },
+  '500100732259': {
+    base: 1650000, cv: 0.2, negativeDays: 2, minBalanceShare: 0.08,
+    opening: -0.04, payroll: 0.22, rent: 0.09, suppliers: 0.575, other: 0.02, taxQuarter: 0.025,
+    events: [
+      { m: 2, label: 'Закупка товара к весеннему сезону', share: 0.3, recurring: true },
+      { m: 8, label: 'Закупка к школьному сезону', share: 0.28, recurring: true },
+      { m: 11, label: 'Закупка к новогоднему сезону', share: 0.35, recurring: true },
+    ],
+  },
+  '7743987654': {
+    base: 160000, cv: 0.45, negativeDays: 12, minBalanceShare: 0.0,
+    opening: 0.3, payroll: 0.45, rent: 0.25, suppliers: 0.38, other: 0.0, taxQuarter: 0.0, events: [],
+  },
+  '7700000001': {
+    base: 90000, cv: 0.3, negativeDays: 6, minBalanceShare: 0.02,
+    opening: 0.2, payroll: 0.5, rent: 0.2, suppliers: 0.35, other: 0.0, taxQuarter: 0.0, events: [],
+  },
 };
+
+const r1000 = (n) => Math.round(n / 1000) * 1000;
 
 export function buildStatement(inn, monthsCount = 12, now = new Date()) {
   const p = STATEMENTS[inn];
@@ -99,19 +127,27 @@ export function buildStatement(inn, monthsCount = 12, now = new Date()) {
   const months = [];
   const company = COMPANIES[inn];
   const available = Math.min(monthsCount, Math.max(1, (company?.regMonthsAgo ?? 12)));
+  let balance = r1000(p.base * p.opening);
   for (let i = available; i >= 1; i--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const m = d.getUTCMonth() + 1;
+    // Порядок вызовов rnd() как в первой версии генератора: поступления и скоринг не меняются
     const swing = (rnd() * 2 - 1) * p.cv;
-    const inflow = Math.round((p.base * (1 + swing)) / 1000) * 1000;
-    const outflow = Math.round((inflow * (0.9 + rnd() * 0.08)) / 1000) * 1000;
+    const inflow = r1000(p.base * (1 + swing));
+    const supplierJitter = 0.97 + rnd() * 0.06;
     const negativeDays = Math.max(0, Math.round(p.negativeDays + (rnd() * 2 - 1) * (p.negativeDays > 0 ? 1.5 : 0)));
-    months.push({
-      month: d.toISOString().slice(0, 7),
-      inflow,
-      outflow,
-      minBalance: Math.round((inflow * p.minBalanceShare * (0.8 + rnd() * 0.4)) / 1000) * 1000,
-      negativeDays,
-    });
+    const minBalance = r1000(inflow * p.minBalanceShare * (0.8 + rnd() * 0.4));
+    const breakdown = {
+      payroll: r1000(p.base * p.payroll),
+      rent: r1000(p.base * p.rent),
+      suppliers: r1000(inflow * p.suppliers * supplierJitter),
+      taxes: [1, 4, 7, 10].includes(m) ? r1000(p.base * p.taxQuarter) : 0,
+      other: r1000(p.base * p.other),
+    };
+    const events = p.events.filter((e) => e.m === m).map((e) => ({ label: e.label, amount: r1000(p.base * e.share), recurring: e.recurring }));
+    const outflow = Object.values(breakdown).reduce((a, b) => a + b, 0) + events.reduce((a, e) => a + e.amount, 0);
+    balance += inflow - outflow;
+    months.push({ month: d.toISOString().slice(0, 7), inflow, outflow, balance, minBalance, negativeDays, breakdown, events });
   }
   return months;
 }

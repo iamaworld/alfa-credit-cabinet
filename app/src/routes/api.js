@@ -6,6 +6,7 @@ import { parseInn, parseRequest } from '../util/validate.js';
 import { PRODUCTS, PURPOSES, ENGINE_VERSION } from '../engine/products.js';
 import { preview, preapprovedOffers, productFit, OFFER_VALID_DAYS } from '../engine/offer.js';
 import { buildFeed } from '../services/feed.js';
+import { forecastCashflow } from '../engine/cashflow.js';
 import { DEFAULT_POLICY } from '../engine/decision.js';
 import { idempotent } from '../util/idempotency.js';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '../seed.js';
@@ -113,7 +114,15 @@ export function createApi({ db, config, apps, contexts, notifications, enrichmen
     const inn = needInn(req);
     const { ctx, data } = await contexts.get(inn);
     const list = apps.listFor(req.user).filter((a) => a.inn === inn).map((a) => ({ ...a }));
-    res.json(buildFeed({ ctx, fns: data.fns, applications: list }));
+    res.json(buildFeed({ ctx, fns: data.fns, applications: list, cashflow: forecastCashflow({ statement: data.statement?.months }), inn }));
+  }));
+
+  // ----- денежный календарь: прогноз остатка на 12 месяцев по выписке -----
+  r.get('/companies/:inn/cashflow', requireRole('client'), wrap(async (req, res) => {
+    const inn = needInn(req);
+    const { data } = await contexts.get(inn);
+    const cf = forecastCashflow({ statement: data.statement?.months });
+    res.json(cf ? { available: true, ...cf } : { available: false, reason: data.statement ? 'short_history' : 'no_statement' });
   }));
 
   // ----- ИИ-помощник: задача своими словами → параметры заявки -----
@@ -136,9 +145,11 @@ export function createApi({ db, config, apps, contexts, notifications, enrichmen
     const declared = req.body.declaredRevenue ? Math.round(Number(req.body.declaredRevenue)) : null;
     if (declared !== null && !(declared > 0)) throw badRequest('Выручка — положительное число', { field: 'declaredRevenue' });
     const compareTo = req.body.compareTo ? parseRequest(req.body.compareTo) : null;
-    const { ctx, degraded } = await contexts.get(inn, { declaredMonthlyRevenue: declared });
+    const { ctx, data, degraded } = await contexts.get(inn, { declaredMonthlyRevenue: declared });
     const { result } = preview(ctx, request, compareTo);
-    res.json({ ...result, degraded, fit: req.body.purpose ? productFit(ctx, req.body.purpose) : undefined });
+    // Как платёж ляжет на деньги бизнеса: тот же прогноз остатка, но с поступлением кредита и платежами
+    const cashflow = forecastCashflow({ statement: data.statement?.months, loan: { amount: request.amount, payment: result.payment, term: request.term, purchase: PRODUCTS[request.product].securedByPurchase, revolving: request.product === 'overdraft', rate: result.rate?.to } });
+    res.json({ ...result, degraded, fit: req.body.purpose ? productFit(ctx, req.body.purpose) : undefined, cashflow });
   }));
 
   // ----- заявки (клиент) -----

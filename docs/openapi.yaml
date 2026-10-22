@@ -111,6 +111,32 @@ paths:
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: object, properties: { offers: { type: array, items: { $ref: '#/components/schemas/PreapprovedOffer' } }, degraded: { type: boolean }, validDays: { type: integer } } } } } }
         '403': { $ref: '#/components/responses/Error' }
+  /api/companies/{inn}/cashflow:
+    get:
+      tags: [Company]
+      summary: Денежный календарь — прогноз остатка на 12 месяцев
+      description: |
+        Прогноз по выписке: постоянные расходы, доля поставщиков, налоги по месяцам года и ежегодные события
+        прошлого года повторяются, разовые траты — нет. Месяцы с отрицательным остатком — разрывы;
+        для них предлагается овердрафт с запасом 15 %. Учебная модель: форма денежного потока, а не точная сумма.
+      parameters: [{ name: inn, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          description: Прогноз или причина, почему его нет (available = false, reason = no_statement | short_history)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+                  reason: { type: string }
+                  history: { type: array, items: { type: object, properties: { month: { type: string, example: '2026-09' }, inflow: { type: integer }, outflow: { type: integer }, balance: { type: integer } } } }
+                  forecast: { type: array, items: { type: object, properties: { month: { type: string }, inflow: { type: integer }, outflow: { type: integer }, balance: { type: integer }, events: { type: array, items: { type: object, properties: { label: { type: string }, amount: { type: integer } } } } } } }
+                  gaps: { type: array, items: { type: object } }
+                  minBalance: { type: integer }
+                  minMonth: { type: string }
+                  suggestion: { type: object, nullable: true, properties: { product: { type: string }, amount: { type: integer }, term: { type: integer }, purpose: { type: string }, reason: { type: string } } }
+        '403': { $ref: '#/components/responses/Error' }
   /api/companies/{inn}/feed:
     get:
       tags: [Company]

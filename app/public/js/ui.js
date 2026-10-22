@@ -155,3 +155,115 @@ export function stackable(table) {
   table.classList.add('stackable');
   return table;
 }
+
+// ---------- Денежный календарь: график остатка на счёте ----------
+// Серии проверены валидатором палитры (CVD ΔE ≥ 14): синий — без кредита, пурпурный — с кредитом.
+// Красный — только статус «разрыв» (зона ниже нуля), для серий не используется.
+const SERIES = { base: '#2A77EF', loan: '#B5459B' };
+const MON = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const MON_FULL = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+export const monthShort = (ym) => MON[Number(ym.slice(5, 7)) - 1];
+export const monthName = (ym) => `${MON_FULL[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+export const compactRub = (n) => {
+  const a = Math.abs(n), s = n < 0 ? '−' : '';
+  if (a >= 1_000_000) return `${s}${String(+(a / 1_000_000).toFixed(1)).replace('.', ',')} млн`;
+  if (a >= 1_000) return `${s}${Math.round(a / 1_000)} тыс`;
+  return a ? `${s}${a}` : '0';
+};
+function svg(tag, attrs = {}, ...children) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) if (v != null) el.setAttribute(k, v);
+  for (const c of children.flat()) if (c != null) el.append(c);
+  return el;
+}
+function niceStep(range) {
+  const raw = range / 4, p = 10 ** Math.floor(Math.log10(raw)), n = raw / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
+}
+
+/**
+ * @param {{history: Array, forecast: Array}} cf  ответ /cashflow или поле cashflow из пересчёта
+ * @param {{withLoan?: boolean, height?: number, caption: string}} opts
+ */
+export function cashChart(cf, { withLoan = false, height = 240, caption }) {
+  const points = [...cf.history.map((p) => ({ ...p, actual: true })), ...cf.forecast.map((p) => ({ ...p, actual: false }))];
+  const wrap = h('div', { class: 'cash-chart' });
+  const tip = h('div', { class: 'cash-tip', hidden: true, role: 'status' });
+  const plot = h('div', { class: 'cash-plot', role: 'img', 'aria-label': caption });
+  const legend = withLoan ? h('div', { class: 'cash-legend' },
+    h('span', null, h('i', { style: { background: SERIES.base } }), 'Без кредита'),
+    h('span', null, h('i', { style: { background: SERIES.loan } }), 'С кредитом'),
+    h('span', null, h('i', { class: 'dash' }), 'Пунктир — прогноз')) : h('div', { class: 'cash-legend' }, h('span', null, h('i', { class: 'solid' }), 'Факт'), h('span', null, h('i', { class: 'dash' }), 'Прогноз'));
+
+  function draw() {
+    const W = Math.max(300, plot.clientWidth || 640), H = height, padL = 56, padR = 12, padT = 12, padB = 26;
+    const vals = points.flatMap((p) => [p.balance, withLoan ? p.balanceWithLoan : null]).filter((v) => v != null);
+    let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+    const step = niceStep(hi - lo || 1);
+    lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+    const x = (i) => padL + (i * (W - padL - padR)) / (points.length - 1);
+    const y = (v) => padT + ((hi - v) * (H - padT - padB)) / (hi - lo || 1);
+    const g = svg('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` });
+    // разрыв: всё ниже нуля — светлая статусная заливка
+    if (lo < 0) g.append(svg('rect', { x: padL, y: y(0), width: W - padL - padR, height: y(lo) - y(0), class: 'cash-neg' }));
+    for (let v = lo; v <= hi + 1; v += step) {
+      g.append(svg('line', { x1: padL, x2: W - padR, y1: y(v), y2: y(v), class: v === 0 ? 'cash-zero' : 'cash-grid' }));
+      g.append(svg('text', { x: padL - 8, y: y(v) + 4, class: 'cash-axis', 'text-anchor': 'end' }, compactRub(v)));
+    }
+    const todayI = cf.history.length - 1;
+    g.append(svg('line', { x1: x(todayI), x2: x(todayI), y1: padT, y2: H - padB, class: 'cash-today' }));
+    g.append(svg('text', { x: x(todayI) + 6, y: padT + 10, class: 'cash-axis' }, 'сейчас'));
+    points.forEach((p, i) => { if (i % (W < 520 ? 3 : 2) === 0 || i === points.length - 1) g.append(svg('text', { x: x(i), y: H - 8, class: 'cash-axis', 'text-anchor': 'middle' }, monthShort(p.month))); });
+    const path = (key, from, to) => points.slice(from, to + 1).map((p, j) => `${j ? 'L' : 'M'}${x(from + j).toFixed(1)},${y(p[key]).toFixed(1)}`).join('');
+    g.append(svg('path', { d: path('balance', 0, todayI), class: 'cash-line', stroke: SERIES.base }));
+    g.append(svg('path', { d: path('balance', todayI, points.length - 1), class: 'cash-line dashed', stroke: SERIES.base }));
+    if (withLoan) {
+      const lp = points.map((p, i) => (i < todayI ? null : `${i === todayI ? 'M' : 'L'}${x(i).toFixed(1)},${y(i === todayI ? p.balance : p.balanceWithLoan).toFixed(1)}`)).filter(Boolean).join('');
+      g.append(svg('path', { d: lp, class: 'cash-line dashed', stroke: SERIES.loan }));
+    }
+    // маркеры разрывов: точка с кольцом цвета фона
+    points.forEach((p, i) => {
+      const v = withLoan && !p.actual ? p.balanceWithLoan : p.balance;
+      if (!p.actual && v < 0) g.append(svg('circle', { cx: x(i), cy: y(v), r: 5, class: 'cash-gap-dot' }));
+    });
+    // слой наведения: полоса на каждый месяц шире точки
+    const cross = svg('line', { y1: padT, y2: H - padB, class: 'cash-cross', visibility: 'hidden' });
+    g.append(cross);
+    points.forEach((p, i) => {
+      const band = (W - padL - padR) / (points.length - 1);
+      const r = svg('rect', { x: x(i) - band / 2, y: 0, width: band, height: H, fill: 'transparent', tabindex: 0, 'aria-label': `${monthName(p.month)}: ${compactRub(p.balance)} ₽` });
+      const show = () => {
+        cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+        clear(tip).append(...[
+          h('b', null, `${monthName(p.month)}${p.actual ? '' : ' · прогноз'}`),
+          h('div', { class: 'row between' }, h('span', null, withLoan ? 'Без кредита' : 'Остаток'), h('b', { class: p.balance < 0 ? 'neg' : '' }, `${compactRub(p.balance)} ₽`)),
+          withLoan && !p.actual ? h('div', { class: 'row between' }, h('span', null, 'С кредитом'), h('b', { class: p.balanceWithLoan < 0 ? 'neg' : '' }, `${compactRub(p.balanceWithLoan)} ₽`)) : null,
+          h('div', { class: 'row between muted' }, h('span', null, 'Поступления'), h('span', null, `+${compactRub(p.inflow)}`)),
+          h('div', { class: 'row between muted' }, h('span', null, 'Списания'), h('span', null, `−${compactRub(p.outflow)}`)),
+          ...(p.events || []).map((e) => h('div', { class: 'small' }, `• ${e.label}: ${compactRub(e.amount)} ₽`))].filter(Boolean));
+        tip.hidden = false;
+        const left = Math.min(Math.max(x(i) + 12, 0), W - 230);
+        tip.style.left = `${x(i) > W - 250 ? x(i) - 232 : left}px`;
+      };
+      const hide = () => { cross.setAttribute('visibility', 'hidden'); tip.hidden = true; };
+      r.addEventListener('mouseenter', show); r.addEventListener('focus', show);
+      r.addEventListener('mouseleave', hide); r.addEventListener('blur', hide);
+      g.append(r);
+    });
+    clear(plot).append(g);
+  }
+
+  const table = h('details', { class: 'why cash-table' }, h('summary', null, 'Таблица по месяцам'),
+    h('div', { class: 'scroll-x' }, h('table', { class: 'tbl sched' },
+      h('thead', null, h('tr', null, ['Месяц', 'Поступления', 'Списания', withLoan ? 'Остаток без кредита' : 'Остаток', withLoan ? 'С кредитом' : null, 'События'].filter(Boolean).map((t) => h('th', null, t)))),
+      h('tbody', null, points.map((p) => h('tr', null,
+        h('td', null, `${monthName(p.month)}${p.actual ? '' : ' (прогноз)'}`), h('td', { class: 'num' }, rub(p.inflow)), h('td', { class: 'num' }, rub(p.outflow)),
+        h('td', { class: 'num' }, rub(p.balance)), withLoan ? h('td', { class: 'num' }, p.actual ? '—' : rub(p.balanceWithLoan)) : null,
+        h('td', null, (p.events || []).map((e) => e.label).join(', ') || '—')))))));
+
+  wrap.append(legend, h('div', { class: 'cash-stage' }, plot, tip), table);
+  setTimeout(draw, 0);
+  const onResize = debounce(() => { if (document.body.contains(wrap)) draw(); else window.removeEventListener('resize', onResize); }, 120);
+  window.addEventListener('resize', onResize);
+  return wrap;
+}

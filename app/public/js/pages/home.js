@@ -1,4 +1,4 @@
-import { h, clear, rub, pct1, months, date, age, badge, meter, factorList, skeleton, toast, productIcon, rateRange, icon } from '../ui.js';
+import { h, clear, rub, pct1, months, date, age, badge, meter, factorList, skeleton, toast, productIcon, rateRange, icon, cashChart, monthName, compactRub } from '../ui.js';
 import { get, post, products } from '../api.js';
 import { session, go } from '../nav.js';
 
@@ -42,8 +42,9 @@ async function connectStep(root) {
 
 async function renderCompany(root, company, all) {
   const inn = company.inn;
-  const [info, offers, feed, apps, prods] = await Promise.all([
+  const [info, offers, feed, apps, prods, cash] = await Promise.all([
     get(`/companies/${inn}`), get(`/companies/${inn}/offers`), get(`/companies/${inn}/feed`), get('/applications'), products(),
+    get(`/companies/${inn}/cashflow`).catch(() => ({ available: false })),
   ]);
   const pname = Object.fromEntries(prods.products.map((p) => [p.id, p.name]));
   const avail = offers.offers.filter((o) => o.available);
@@ -100,7 +101,7 @@ async function renderCompany(root, company, all) {
   const attentionBox = attention.length ? h('div', { class: 'banner info' }, h('div', { style: { display: 'grid', gap: '6px' } }, h('b', null, 'Нужно ваше действие'),
     attention.map((a) => h('a', { class: 'link', href: `#/applications/${a.id}` }, `${a.number}: ${a.statusTitle.toLowerCase()}`)))) : null;
 
-  root.append(...[head, attentionBox, degraded, company.status === 'ACTIVE' ? assistantCard(inn) : null, hero,
+  root.append(...[head, attentionBox, degraded, company.status === 'ACTIVE' ? cashCard(inn, cash, info.summary.hasCurrentOverdue) : null, company.status === 'ACTIVE' ? assistantCard(inn) : null, hero,
     h('div', { class: 'stack' },
       productCards ? h('h2', null, 'Предложения по продуктам') : null,
       productCards,
@@ -139,11 +140,13 @@ function questCard(q) {
 }
 
 function feedItem(i) {
+  const tag = i.kind === 'alert' ? badge('Важно', 'danger') : i.kind === 'event' ? badge('Скоро', 'blue') : i.kind === 'calm' ? badge('Всё спокойно', 'success') : i.kind === 'support' ? badge('Возможно подойдёт', 'blue') : null;
   return h('article', { class: 'stack feed-item' },
-    h('div', { class: 'row' }, h('b', null, i.title), i.kind === 'support' ? badge('Возможно подойдёт', 'blue') : null),
+    tag ? h('div', null, tag) : null,
+    h('b', null, i.title),
     h('p', { class: 'muted small' }, i.text),
     i.note ? h('p', { class: 'hint' }, i.note) : null,
-    i.link ? h('a', { class: 'link', href: i.link }, 'Открыть') : null);
+    i.link ? h('a', { class: i.kind === 'alert' ? 'btn small' : 'link', href: i.link }, i.linkText || 'Открыть') : null);
 }
 
 // «Опишите задачу своими словами»: локальная модель превращает фразу в цель, сумму и срок,
@@ -180,4 +183,28 @@ function assistantCard(inn) {
     h('div', { class: 'assistant-row' }, text, btn), err,
     h('div', { class: 'chips wrap' }, EXAMPLES.map((x) => h('button', { class: 'chip', type: 'button', onclick: () => { text.value = x; text.focus(); } }, x))),
     status);
+}
+
+// Денежный календарь: прогноз остатка на год по выписке; разрывы видны заранее, их можно закрыть в один клик
+function cashCard(inn, cf, blocked = false) {
+  if (!cf.available) {
+    return h('section', { class: 'card stack' }, h('h2', null, 'Денежный календарь'),
+      h('p', { class: 'muted' }, cf.reason === 'no_statement'
+        ? 'Банк пока не видит ваш расчётный счёт. Когда выписка подключена, здесь появится прогноз денег на год: в какие месяцы может не хватить и чем закрыть разрыв заранее.'
+        : 'Истории по счёту пока мало для прогноза: нужно хотя бы два месяца операций.'));
+  }
+  const gap = cf.gaps[0];
+  const s = cf.suggestion;
+  return h('section', { class: 'card stack' },
+    h('div', { class: 'cash-head' },
+      h('div', null, h('h2', null, 'Деньги на счёте: прогноз на год'),
+        h('p', { class: 'muted' }, 'По вашей выписке: зарплата, аренда, поставщики, налоги и то, что повторяется каждый год.')),
+      gap ? h('span', { class: 'badge danger' }, icon('warn', 16), `Разрыв: ${monthName(gap.month).toLowerCase()}`)
+        : h('span', { class: 'badge success' }, icon('check', 16), 'Разрывов не видно')),
+    cashChart(cf, { caption: `Прогноз остатка на счёте на 12 месяцев. Минимум ${compactRub(cf.minBalance)} ₽, ${monthName(cf.minMonth).toLowerCase()}.` }),
+    s && blocked ? h('div', { class: 'cash-cta' }, h('p', null, h('b', null, s.reason), ' Пока есть просрочка по кредиту, новый кредит недоступен: заложите эти расходы заранее или сдвиньте крупные платежи.'))
+    : s ? h('div', { class: 'cash-cta' },
+      h('p', null, h('b', null, s.reason), ' Овердрафт закроет разрыв заранее: проценты — только за дни, когда деньги нужны.'),
+      h('a', { class: 'btn', href: `#/offer/${inn}?product=${s.product}&amount=${s.amount}&term=${s.term}&purpose=${s.purpose}&from=calendar` }, 'Закрыть разрыв'))
+      : h('p', { class: 'hint' }, `Минимальный остаток по прогнозу — ${compactRub(cf.minBalance)} ₽ (${monthName(cf.minMonth).toLowerCase()}). Учебная модель: показывает форму денежного потока, а не точную сумму.`));
 }

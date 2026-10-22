@@ -1,6 +1,7 @@
 // Лента для клиента: подсказки, примеры мер поддержки и «готовность к кредиту».
 // Содержимое синтетическое. Меры поддержки — гипотеза продукта, а не справочник реальных программ.
 import { PRODUCTS } from '../engine/products.js';
+import { monthIn } from '../engine/cashflow.js';
 
 const TIPS = {
   trade: { title: 'Торговля: считайте оборот по месяцам', text: 'Сезонные провалы выручки снижают оценку стабильности. Равномерные поступления на счёт повышают шансы.' },
@@ -17,7 +18,31 @@ const PROGRAMS = [
   { id: 'young-business', title: 'Поддержка начинающих предпринимателей', text: 'Для бизнеса младше года действуют отдельные программы микрозаймов.', when: (c) => c.ageMonths < 12 },
 ];
 
-export function buildFeed({ ctx, fns, applications }) {
+const k = (n) => `${Math.round(Math.abs(n) / 1000).toLocaleString('ru-RU')} тыс. ₽`;
+const cap = (s) => s[0].toUpperCase() + s.slice(1);
+
+// События из денежного календаря: лента у каждого клиента своя, потому что строится из прогноза его денег
+function cashflowItems(cf, inn, creditBlocked) {
+  if (!cf) return [{ kind: 'tip', id: 'cf-none', title: 'Денежный календарь появится после подключения счёта', text: 'По выписке мы заранее покажем месяцы, когда денег может не хватить, и предложим, чем закрыть разрыв.' }];
+  const items = [];
+  if (cf.suggestion && creditBlocked) {
+    // Кредит сейчас недоступен (стоп-фактор) — предупреждаем о разрыве, но не предлагаем то, что точно откажут
+    items.push({ kind: 'alert', id: `cf-gap-${cf.minMonth}`, title: `${cap(monthIn(cf.gaps[0].month))} может не хватить денег`, text: `${cf.suggestion.reason} Пока есть стоп-фактор, кредит недоступен: заложите эти расходы заранее или сдвиньте крупные платежи.` });
+  } else if (cf.suggestion) {
+    const s = cf.suggestion;
+    items.push({ kind: 'alert', id: `cf-gap-${cf.minMonth}`, title: `${cap(monthIn(cf.gaps[0].month))} может не хватить денег`, text: `${s.reason} Овердрафт на ${k(s.amount)} закроет разрыв заранее — проценты только за дни, когда деньги нужны.`,
+      link: `#/offer/${inn}?product=${s.product}&amount=${s.amount}&term=${s.term}&purpose=${s.purpose}`, linkText: 'Закрыть разрыв' });
+  } else {
+    items.push({ kind: 'calm', id: 'cf-calm', title: 'Разрывов в ближайший год не видно', text: `Минимальный остаток по прогнозу — ${k(cf.minBalance)} ${monthIn(cf.minMonth)}. Хороший момент планировать покупку оборудования или запас товара.` });
+  }
+  // Крупные списания в ближайшие два месяца — чтобы к ним подготовиться
+  for (const f of cf.forecast.slice(0, 2)) for (const e of f.events) {
+    items.push({ kind: 'event', id: `cf-ev-${f.month}-${e.label}`, title: `${cap(monthIn(f.month))}: ${e.label[0].toLowerCase() + e.label.slice(1)} — около ${k(e.amount)}`, text: 'Видим это списание по прошлому году. Учли его в прогнозе остатка.' });
+  }
+  return items;
+}
+
+export function buildFeed({ ctx, fns, applications, cashflow = null, inn = ctx.inn }) {
   const items = [];
   const checklist = [
     { id: 'registry', label: 'Компания найдена в реестре', done: ctx.status === 'ACTIVE' },
@@ -29,6 +54,8 @@ export function buildFeed({ ctx, fns, applications }) {
   ];
   const done = checklist.filter((c) => c.done).length;
   items.push({ kind: 'quest', id: 'readiness', title: 'Готовность к кредиту', progress: { done, total: checklist.length }, checklist });
+
+  items.push(...cashflowItems(cashflow, inn, ctx.status !== 'ACTIVE' || ctx.bki.currentOverdue.length > 0));
 
   const pending = applications.find((a) => ['needs_info', 'counter_offer', 'approved', 'signing'].includes(a.status));
   if (pending) items.push({ kind: 'news', id: `app-${pending.id}`, title: `Заявка ${pending.number}: ${pending.statusTitle}`, text: 'Для этой заявки нужно ваше действие.', link: `#/applications/${pending.id}` });
